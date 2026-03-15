@@ -1,0 +1,21 @@
+{
+  "required": true,
+  "package": "com.sammy.minedevice.mixin",
+  "compatibilityLevel": "JAVA_17",
+  "minVersion": "0.8",
+  "client": [
+    "client.CameraMixin",
+    "client.GameRendererMixin",
+    "client.GuiMixin",
+    "client.HumanoidModelMixin",
+    "client.ItemInHandLayerMixin",
+    "client.ItemInHandRendererMixin",
+    "client.LevelRendererMixin"
+  ],
+  "mixins": [
+    "PlayerMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

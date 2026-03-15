@@ -1,0 +1,6 @@
+{
+  "parent": "minedevice:item/megaphone_base",
+  "overrides": [
+    { "predicate": { "minedevice:tooting": 1 }, "model": "minedevice:item/megaphone_tooting" }
+  ]
+}

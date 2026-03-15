@@ -1,0 +1,36 @@
+{
+  "format_version": "1.21.11",
+  "credit": "Made with Blockbench",
+  "texture_size": [32, 32],
+  "textures": {
+    "0": "minedevice:block/home_phone",
+    "particle": "minedevice:block/home_phone"
+  },
+  "elements": [
+    {
+      "from": [2, 0, 4],
+      "to": [14, 2, 12],
+      "rotation": {"angle": -22.5, "axis": "x", "origin": [7, 3, 5]},
+      "faces": {
+        "north": {"uv": [0, 8, 6, 9], "texture": "#0"},
+        "east": {"uv": [9, 8, 13, 9], "texture": "#0"},
+        "south": {"uv": [0, 9, 6, 10], "texture": "#0"},
+        "west": {"uv": [9, 9, 13, 10], "texture": "#0"},
+        "up": {"uv": [6, 4, 0, 0], "texture": "#0"},
+        "down": {"uv": [6, 4, 0, 8], "texture": "#0"}
+      }
+    },
+    {
+      "from": [3, 0, 9],
+      "to": [13, 3, 12],
+      "faces": {
+        "north": {"uv": [6, 0, 11, 1.5], "texture": "#0"},
+        "east": {"uv": [0, 10, 1.5, 11.5], "texture": "#0"},
+        "south": {"uv": [6, 1.5, 11, 3], "texture": "#0"},
+        "west": {"uv": [1.5, 10, 3, 11.5], "texture": "#0"},
+        "up": {"uv": [11, 4.5, 6, 3], "texture": "#0"},
+        "down": {"uv": [11, 4.5, 6, 6], "texture": "#0"}
+      }
+    }
+  ]
+}

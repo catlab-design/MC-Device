@@ -1,0 +1,11 @@
+{
+  "parent": "minedevice:item/phone_3d",
+  "overrides": [
+    {
+      "predicate": {
+        "minedevice:call_pose": 1.0
+      },
+      "model": "minedevice:item/phone_3d_call"
+    }
+  ]
+}
