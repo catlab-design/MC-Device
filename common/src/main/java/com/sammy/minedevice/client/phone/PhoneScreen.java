@@ -2,7 +2,7 @@ package com.sammy.minedevice.client.phone;
 
 import com.mojang.blaze3d.platform.InputConstants;
 import com.mojang.blaze3d.platform.NativeImage;
-import com.sammy.minedevice.MegaphoneMod;
+import com.sammy.minedevice.Minedevice;
 import com.sammy.minedevice.ModItems;
 import com.sammy.minedevice.block.entity.HomePhoneBlockEntity;
 import com.sammy.minedevice.phone.PhoneCallState;
@@ -56,41 +56,41 @@ import java.util.Objects;
 import java.util.UUID;
 
 public final class PhoneScreen extends Screen {
-    private static final ResourceLocation FRAME_TEXTURE = new ResourceLocation(MegaphoneMod.MOD_ID,
+    private static final ResourceLocation FRAME_TEXTURE = new ResourceLocation(Minedevice.MOD_ID,
             "textures/gui/phone_frame.png");
-    private static final ResourceLocation UNLOCK_TEXTURE = new ResourceLocation(MegaphoneMod.MOD_ID,
+    private static final ResourceLocation UNLOCK_TEXTURE = new ResourceLocation(Minedevice.MOD_ID,
             "textures/gui/phone_unlock.png");
-    private static final ResourceLocation LEFT_NAV_TEXTURE = new ResourceLocation(MegaphoneMod.MOD_ID,
+    private static final ResourceLocation LEFT_NAV_TEXTURE = new ResourceLocation(Minedevice.MOD_ID,
             "textures/gui/phone_nav_left.png");
-    private static final ResourceLocation RIGHT_NAV_TEXTURE = new ResourceLocation(MegaphoneMod.MOD_ID,
+    private static final ResourceLocation RIGHT_NAV_TEXTURE = new ResourceLocation(Minedevice.MOD_ID,
             "textures/gui/phone_nav_right.png");
-    private static final ResourceLocation HOME_NAV_TEXTURE = new ResourceLocation(MegaphoneMod.MOD_ID,
+    private static final ResourceLocation HOME_NAV_TEXTURE = new ResourceLocation(Minedevice.MOD_ID,
             "textures/gui/phone_nav_home.png");
-    private static final ResourceLocation APP_CALL_TEXTURE = new ResourceLocation(MegaphoneMod.MOD_ID,
+    private static final ResourceLocation APP_CALL_TEXTURE = new ResourceLocation(Minedevice.MOD_ID,
             "textures/gui/phone_app_call.png");
-    private static final ResourceLocation APP_CHAT_TEXTURE = new ResourceLocation(MegaphoneMod.MOD_ID,
+    private static final ResourceLocation APP_CHAT_TEXTURE = new ResourceLocation(Minedevice.MOD_ID,
             "textures/gui/phone_app_chat.png");
-    private static final ResourceLocation APP_SHOP_TEXTURE = new ResourceLocation(MegaphoneMod.MOD_ID,
+    private static final ResourceLocation APP_SHOP_TEXTURE = new ResourceLocation(Minedevice.MOD_ID,
             "textures/gui/phone_app_shop.png");
-    private static final ResourceLocation APP_GOOGLE_TEXTURE = new ResourceLocation(MegaphoneMod.MOD_ID,
+    private static final ResourceLocation APP_GOOGLE_TEXTURE = new ResourceLocation(Minedevice.MOD_ID,
             "textures/gui/phone_app_setting.png");
-    private static final ResourceLocation APP_GALLERY_TEXTURE = new ResourceLocation(MegaphoneMod.MOD_ID,
+    private static final ResourceLocation APP_GALLERY_TEXTURE = new ResourceLocation(Minedevice.MOD_ID,
             "textures/gui/phone_app_gallery.png");
-    private static final ResourceLocation APP_BANK_TEXTURE = new ResourceLocation(MegaphoneMod.MOD_ID,
+    private static final ResourceLocation APP_BANK_TEXTURE = new ResourceLocation(Minedevice.MOD_ID,
             "textures/gui/phone_app_bank.png");
-    private static final ResourceLocation APP_CAMERA_TEXTURE = new ResourceLocation(MegaphoneMod.MOD_ID,
+    private static final ResourceLocation APP_CAMERA_TEXTURE = new ResourceLocation(Minedevice.MOD_ID,
             "textures/gui/phone_app_camera.png");
-    static final ResourceLocation CALL_MENU_TEXTURE = new ResourceLocation(MegaphoneMod.MOD_ID,
+    static final ResourceLocation CALL_MENU_TEXTURE = new ResourceLocation(Minedevice.MOD_ID,
             "textures/gui/call_menu.png");
-    static final ResourceLocation LIST_MENU_TEXTURE = new ResourceLocation(MegaphoneMod.MOD_ID,
+    static final ResourceLocation LIST_MENU_TEXTURE = new ResourceLocation(Minedevice.MOD_ID,
             "textures/gui/list_menu.png");
-    private static final ResourceLocation SHUTTER_BUTTON_TEXTURE = new ResourceLocation(MegaphoneMod.MOD_ID,
+    private static final ResourceLocation SHUTTER_BUTTON_TEXTURE = new ResourceLocation(Minedevice.MOD_ID,
             "textures/gui/shutter_button.png");
-    private static final ResourceLocation CAMFLIP_BUTTON_TEXTURE = new ResourceLocation(MegaphoneMod.MOD_ID,
+    private static final ResourceLocation CAMFLIP_BUTTON_TEXTURE = new ResourceLocation(Minedevice.MOD_ID,
             "textures/gui/camflip_button.png");
-    static final ResourceLocation DELETE_BUTTON_TEXTURE = new ResourceLocation(MegaphoneMod.MOD_ID,
+    static final ResourceLocation DELETE_BUTTON_TEXTURE = new ResourceLocation(Minedevice.MOD_ID,
             "textures/gui/delete_button.png");
-    static final ResourceLocation DEFAULT_BACKGROUND_TEXTURE = new ResourceLocation(MegaphoneMod.MOD_ID,
+    static final ResourceLocation DEFAULT_BACKGROUND_TEXTURE = new ResourceLocation(Minedevice.MOD_ID,
             "textures/gui/wallpaper/default.png");
     private static final int FRAME_WIDTH = 160;
     private static final int FRAME_HEIGHT = 336;
@@ -175,7 +175,7 @@ public final class PhoneScreen extends Screen {
     private final InteractionHand openHand;
     private final BlockPos homePhonePos;
     private final boolean homePhoneMode;
-    private final PhonePhotoStore photoStore = new PhonePhotoStore(MegaphoneMod.MOD_ID);
+    private final PhonePhotoStore photoStore = new PhonePhotoStore(Minedevice.MOD_ID);
     private PhoneScreenLayout layoutState;
     private int callSyncCooldown;
 

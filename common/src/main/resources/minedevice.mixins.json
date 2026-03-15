@@ -9,7 +9,6 @@
     "client.GuiMixin",
     "client.HumanoidModelMixin",
     "client.ItemInHandLayerMixin",
-    "client.ItemInHandRendererMixin",
     "client.LevelRendererMixin"
   ],
   "mixins": [

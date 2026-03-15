@@ -1,6 +1,6 @@
 package com.sammy.minedevice.item;
 
-import com.sammy.minedevice.MegaphoneMod;
+import com.sammy.minedevice.Minedevice;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResultHolder;
 import net.minecraft.world.entity.player.Player;
@@ -31,7 +31,7 @@ public final class PhoneItem extends Item {
             Method openMethod = hookClass.getDeclaredMethod("openScreen", InteractionHand.class);
             openMethod.invoke(null, hand);
         } catch (ReflectiveOperationException exception) {
-            MegaphoneMod.LOGGER.debug("Failed to open phone screen", exception);
+            Minedevice.LOGGER.debug("Failed to open phone screen", exception);
         }
     }
 }

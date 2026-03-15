@@ -1,6 +1,6 @@
 package com.sammy.minedevice.forge.client;
 
-import com.sammy.minedevice.client.MegaphoneClient;
+import com.sammy.minedevice.client.MinedeviceClient;
 import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
@@ -15,6 +15,6 @@ public final class MinedeviceForgeClient {
     }
 
     private static void onClientSetup(final FMLClientSetupEvent event) {
-        event.enqueueWork(MegaphoneClient::init);
+        event.enqueueWork(MinedeviceClient::init);
     }
 }

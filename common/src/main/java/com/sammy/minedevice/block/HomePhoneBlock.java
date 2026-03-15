@@ -1,6 +1,6 @@
 package com.sammy.minedevice.block;
 
-import com.sammy.minedevice.MegaphoneMod;
+import com.sammy.minedevice.Minedevice;
 import com.sammy.minedevice.block.entity.HomePhoneBlockEntity;
 import com.sammy.minedevice.item.HomePhoneHandsetItem;
 import com.sammy.minedevice.phone.PhoneCallManager;
@@ -175,7 +175,7 @@ public final class HomePhoneBlock extends HorizontalDirectionalBlock implements 
             Method openMethod = hookClass.getDeclaredMethod("openHomePhoneScreen", BlockPos.class);
             openMethod.invoke(null, blockPos);
         } catch (ReflectiveOperationException exception) {
-            MegaphoneMod.LOGGER.debug("Failed to open home phone screen", exception);
+            Minedevice.LOGGER.debug("Failed to open home phone screen", exception);
         }
     }
 

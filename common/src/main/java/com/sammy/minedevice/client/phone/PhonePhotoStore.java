@@ -1,7 +1,7 @@
 package com.sammy.minedevice.client.phone;
 
 import com.mojang.blaze3d.platform.NativeImage;
-import com.sammy.minedevice.MegaphoneMod;
+import com.sammy.minedevice.Minedevice;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -77,7 +77,7 @@ final class PhonePhotoStore {
             image.writeToFile(photoPath.toFile());
             return fileName;
         } catch (IOException exception) {
-            MegaphoneMod.LOGGER.debug("Failed to write phone photo", exception);
+            Minedevice.LOGGER.debug("Failed to write phone photo", exception);
             return null;
         }
     }
@@ -223,7 +223,7 @@ final class PhonePhotoStore {
             textureCache.put(fileName, photoTexture);
             return photoTexture;
         } catch (IOException exception) {
-            MegaphoneMod.LOGGER.debug("Failed to load phone photo texture: {}", fileName, exception);
+            Minedevice.LOGGER.debug("Failed to load phone photo texture: {}", fileName, exception);
             return null;
         }
     }

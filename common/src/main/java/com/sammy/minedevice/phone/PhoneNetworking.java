@@ -1,6 +1,6 @@
 package com.sammy.minedevice.phone;
 
-import com.sammy.minedevice.MegaphoneMod;
+import com.sammy.minedevice.Minedevice;
 import com.sammy.minedevice.block.entity.HomePhoneBlockEntity;
 import com.sammy.minedevice.block.entity.HomePhoneRegistry;
 import dev.architectury.event.events.common.PlayerEvent;
@@ -610,6 +610,6 @@ public final class PhoneNetworking {
     }
 
     private static ResourceLocation id(String path) {
-        return new ResourceLocation(MegaphoneMod.MOD_ID, path);
+        return new ResourceLocation(Minedevice.MOD_ID, path);
     }
 }

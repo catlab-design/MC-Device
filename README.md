@@ -1,23 +1,83 @@
-# MineDevice Megaphone
+# MineDevice
 
-Architectury mod (common + fabric + forge) that adds a `Megaphone` item.
+MineDevice is an Architectury mod for Minecraft `1.20.1` that adds a usable mobile phone and home phone system.
 
-When enabled, and while the player is holding the megaphone in either hand, a Plasmo Voice input filter is applied:
+The project currently targets both `Fabric` and `Forge`, with shared gameplay logic in `common/`.
 
-- High-pass around `1300 Hz`
-- Low-pass around `3400 Hz`
-- Soft clipping with threshold near `0.34`
+## Features
 
-## Build Requirements
+- Mobile phone item with in-game app UI
+- Calling between mobile phones and home phones
+- Home phone block with handset and speakerphone flow
+- Chat app with friend list, message history, and offline delivery
+- Camera and gallery system on the mobile phone
+- Optional Plasmo Voice integration for live phone conversations
 
-- Use JDK `21` to run Gradle (Architectury Loom `1.13-SNAPSHOT` requires it).
-- Mod bytecode is still compiled for Java `17`.
+## Current Apps
 
-## Usage
+- `Call`: dial numbers, answer calls, hang up, and manage saved contacts
+- `Chat`: add friends by number, send messages, review conversation history, and delete conversations
+- `Camera`: take photos in-game and save them to the phone
+- `Gallery`: browse saved photos inside the phone UI
 
-1. Install this mod and Plasmo Voice on the client.
-2. Craft `Megaphone` (placeholder texture uses iron ingot).
-3. Hold right click with `Megaphone` and speak.
-4. While active, you hear your own processed voice (loopback) and other players hear the same effect.
+## Platforms
 
-The filter is removed automatically when you stop using the item and on world/server disconnect.
+- Minecraft `1.20.1`
+- Fabric Loader `0.18.4+`
+- Forge `47.4.16+`
+- Architectury API `9.2.14+`
+
+## Optional Dependency
+
+- `Plasmo Voice`
+
+Plasmo Voice is optional, but recommended if you want in-call voice audio for the mobile phone and home phone systems.
+
+## Development Setup
+
+### Requirements
+
+- JDK `21` to run Gradle tasks
+- Java `17` target bytecode for the mod output
+
+## Build
+
+```bash
+./gradlew build
+```
+
+Useful tasks:
+
+```bash
+./gradlew :common:build
+./gradlew :fabric:build
+./gradlew :forge:build
+```
+
+## Run Dev Client
+
+```bash
+./gradlew :fabric:runClient
+```
+
+or
+
+```bash
+./gradlew :forge:runClient
+```
+
+### Project Structure
+
+- [`common/`](common): shared gameplay code, UI, networking, resources
+- [`fabric/`](fabric): Fabric entrypoints and platform glue
+- [`forge/`](forge): Forge entrypoints and platform glue
+
+## License
+
+This project is `All Rights Reserved`.
+
+See [`LICENSE.txt`](LICENSE.txt).
+
+## Author
+
+- `SamSu255`

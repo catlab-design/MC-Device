@@ -1,12 +1,8 @@
 ﻿{
-  "item.minedevice.megaphone": "โทรโข่ง",
   "item.minedevice.phone": "มือถือ",
   "block.minedevice.home_phone": "โทรศัพท์บ้าน",
   "item.minedevice.home_phone": "โทรศัพท์บ้าน",
   "item.minedevice.home_phone_handset": "หูโทรศัพท์บ้าน",
-  "item.minedevice.megaphone_red": "โทรโข่งสีแดง",
-  "item.minedevice.megaphone_yellow": "โทรโข่งสีเหลือง",
-  "item.minedevice.megaphone_light_blue": "โทรโข่งสีฟ้าอ่อน",
   "screen.minedevice.phone.title": "MinePhone",
   "screen.minedevice.phone.title.lock": "ล็อกหน้าจอ",
   "screen.minedevice.phone.title.home": "หน้าหลัก",
@@ -153,10 +149,7 @@
   "toast.minedevice.phone.chat.friend.title": "แชท",
   "toast.minedevice.phone.chat.friend.added": "เพิ่มเพื่อนแล้ว: %s",
   "toast.minedevice.phone.chat.friend.offline": "ต้องให้ %s ออนไลน์ก่อนถึงจะเพิ่มเพื่อนได้",
-  "key.minedevice.toggle_megaphone": "เปิด/ปิด โทรโข่ง",
   "key.categories.minedevice": "MineDevice",
-  "action.minedevice.megaphone.on": "Megaphone: ON",
-  "action.minedevice.megaphone.off": "Megaphone: OFF",
   "subtitles.minedevice.home_phone_ring": "โทรศัพท์บ้านกำลังดัง",
   "subtitles.minedevice.phone_ring": "มือถือกำลังดัง",
   "subtitles.minedevice.phone_dialing": "กำลังโทรออก"

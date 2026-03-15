@@ -1,6 +1,6 @@
 package com.sammy.minedevice.homephone.voice;
 
-import com.sammy.minedevice.MegaphoneMod;
+import com.sammy.minedevice.Minedevice;
 import com.sammy.minedevice.block.entity.HomePhoneRegistry.HomePhoneAddress;
 import com.sammy.minedevice.phone.PhoneCallManager;
 import com.sammy.minedevice.phone.PhoneCallManager.HomePhoneSpeakerBridge;
@@ -68,7 +68,7 @@ public final class HomePhoneVoiceHook {
         } catch (Throwable throwable) {
             addon = null;
             addonLoaded = false;
-            MegaphoneMod.LOGGER.warn("Unable to initialize Plasmo Voice home phone addon", throwable);
+            Minedevice.LOGGER.warn("Unable to initialize Plasmo Voice home phone addon", throwable);
         }
     }
 
@@ -200,7 +200,7 @@ public final class HomePhoneVoiceHook {
             ServerPlayer player = voicePlayer.getInstance().getInstance();
             return player.getUUID();
         } catch (Throwable throwable) {
-            MegaphoneMod.LOGGER.debug("Unable to resolve voice player id for home phone speaker", throwable);
+            Minedevice.LOGGER.debug("Unable to resolve voice player id for home phone speaker", throwable);
             return null;
         }
     }
@@ -242,7 +242,7 @@ public final class HomePhoneVoiceHook {
             voiceServer = server;
             sourceLine = server.getSourceLineManager()
                     .createBuilder(this, "home_phone_speaker", "block.minedevice.home_phone",
-                            MegaphoneMod.MOD_ID + ":textures/gui/voice_overlay.png", 0)
+                            Minedevice.MOD_ID + ":textures/gui/voice_overlay.png", 0)
                     .withPlayers(true)
                     .setDefaultVolume(1.0D)
                     .build();
@@ -319,7 +319,7 @@ public final class HomePhoneVoiceHook {
                 speakerBridge.refresh(server, bridge);
                 return speakerBridge;
             } catch (Throwable throwable) {
-                MegaphoneMod.LOGGER.warn("Unable to create home phone speaker bridge source", throwable);
+                Minedevice.LOGGER.warn("Unable to create home phone speaker bridge source", throwable);
                 return null;
             }
         }
@@ -370,7 +370,7 @@ public final class HomePhoneVoiceHook {
                 listenerDirectSource.setName(sourceName);
             } catch (Throwable throwable) {
                 listenerDirectSource = null;
-                MegaphoneMod.LOGGER.debug("Unable to create home phone handset listener source", throwable);
+                Minedevice.LOGGER.debug("Unable to create home phone handset listener source", throwable);
             }
         }
 
@@ -428,7 +428,7 @@ public final class HomePhoneVoiceHook {
                         talkerSource.setCameraRelative(true);
                         talkerSource.setName(sourceName);
                     } catch (Throwable throwable) {
-                        MegaphoneMod.LOGGER.debug("Unable to create home phone talkback source", throwable);
+                        Minedevice.LOGGER.debug("Unable to create home phone talkback source", throwable);
                         continue;
                     }
                 } else {
@@ -489,7 +489,7 @@ public final class HomePhoneVoiceHook {
                             new PlayerActivationInfo(sourcePlayer, audioPacket)
                     );
                 } catch (Throwable throwable) {
-                    MegaphoneMod.LOGGER.debug("Unable to forward remote phone audio to home phone block", throwable);
+                    Minedevice.LOGGER.debug("Unable to forward remote phone audio to home phone block", throwable);
                 }
             }
 
@@ -501,7 +501,7 @@ public final class HomePhoneVoiceHook {
                             new PlayerActivationInfo(sourcePlayer, audioPacket)
                     );
                 } catch (Throwable throwable) {
-                    MegaphoneMod.LOGGER.debug("Unable to forward remote phone audio to handset listener", throwable);
+                    Minedevice.LOGGER.debug("Unable to forward remote phone audio to handset listener", throwable);
                 }
             }
         }
@@ -515,7 +515,7 @@ public final class HomePhoneVoiceHook {
                 try {
                     outputSource.sendAudioEnd(audioEndPacket.getSequenceNumber(), SPEAKER_OUTPUT_DISTANCE);
                 } catch (Throwable throwable) {
-                    MegaphoneMod.LOGGER.debug("Unable to forward remote phone audio end to home phone block", throwable);
+                    Minedevice.LOGGER.debug("Unable to forward remote phone audio end to home phone block", throwable);
                 }
             }
 
@@ -523,7 +523,7 @@ public final class HomePhoneVoiceHook {
                 try {
                     listenerDirectSource.sendAudioEnd(audioEndPacket.getSequenceNumber());
                 } catch (Throwable throwable) {
-                    MegaphoneMod.LOGGER.debug("Unable to forward remote phone audio end to handset listener", throwable);
+                    Minedevice.LOGGER.debug("Unable to forward remote phone audio end to handset listener", throwable);
                 }
             }
         }
@@ -542,7 +542,7 @@ public final class HomePhoneVoiceHook {
                             new PlayerActivationInfo(sourcePlayer, audioPacket)
                     );
                 } catch (Throwable throwable) {
-                    MegaphoneMod.LOGGER.debug("Unable to forward local phone audio to remote player", throwable);
+                    Minedevice.LOGGER.debug("Unable to forward local phone audio to remote player", throwable);
                 }
             }
 
@@ -564,7 +564,7 @@ public final class HomePhoneVoiceHook {
                 try {
                     talkerSource.sendAudioEnd(audioEndPacket.getSequenceNumber());
                 } catch (Throwable throwable) {
-                    MegaphoneMod.LOGGER.debug("Unable to forward local phone audio end to remote player", throwable);
+                    Minedevice.LOGGER.debug("Unable to forward local phone audio end to remote player", throwable);
                 }
             }
 
@@ -594,7 +594,7 @@ public final class HomePhoneVoiceHook {
                 try {
                     staticSource.remove();
                 } catch (Throwable throwable) {
-                    MegaphoneMod.LOGGER.debug("Unable to remove home phone speaker static source", throwable);
+                    Minedevice.LOGGER.debug("Unable to remove home phone speaker static source", throwable);
                 }
                 return;
             }
@@ -603,7 +603,7 @@ public final class HomePhoneVoiceHook {
                 try {
                     directSource.remove();
                 } catch (Throwable throwable) {
-                    MegaphoneMod.LOGGER.debug("Unable to remove home phone speaker direct source", throwable);
+                    Minedevice.LOGGER.debug("Unable to remove home phone speaker direct source", throwable);
                 }
             }
         }

@@ -3,7 +3,7 @@
   "id": "minedevice",
   "version": "${version}",
   "name": "MineDevice",
-  "description": "Adds a usable megaphone item that applies a voice filter through Plasmo Voice.",
+  "description": "Adds mobile and home phone devices with calling, chat, camera, and optional voice features.",
   "authors": [
     "SamSu255"
   ],

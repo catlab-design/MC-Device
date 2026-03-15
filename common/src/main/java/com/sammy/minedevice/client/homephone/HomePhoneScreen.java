@@ -1,7 +1,7 @@
 package com.sammy.minedevice.client.homephone;
 
 import com.mojang.blaze3d.platform.InputConstants;
-import com.sammy.minedevice.MegaphoneMod;
+import com.sammy.minedevice.Minedevice;
 import com.sammy.minedevice.ModItems;
 import com.sammy.minedevice.block.entity.HomePhoneBlockEntity;
 import com.sammy.minedevice.client.phone.PhoneClientCallState;
@@ -30,7 +30,7 @@ public final class HomePhoneScreen extends Screen {
     private static final int TEXT_STATUS = 0xFF202732;
     private static final int TEXT_HINT = 0xFF667180;
     private static final ResourceLocation QUESTION_MARK_TEXTURE = new ResourceLocation(
-            MegaphoneMod.MOD_ID, "textures/gui/question_mark.png");
+            Minedevice.MOD_ID, "textures/gui/question_mark.png");
 
     private final BlockPos homePhonePos;
     private String dialedNumber = "";

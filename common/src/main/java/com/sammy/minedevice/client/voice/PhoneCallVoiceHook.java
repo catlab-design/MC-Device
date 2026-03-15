@@ -1,6 +1,6 @@
 package com.sammy.minedevice.client.voice;
 
-import com.sammy.minedevice.MegaphoneMod;
+import com.sammy.minedevice.Minedevice;
 import com.sammy.minedevice.client.voice.filter.PhoneCallFilter;
 import su.plo.voice.api.addon.AddonInitializer;
 import su.plo.voice.api.addon.AddonLoaderScope;
@@ -35,7 +35,7 @@ public final class PhoneCallVoiceHook {
         } catch (Throwable throwable) {
             addon = null;
             addonLoaded = false;
-            MegaphoneMod.LOGGER.warn("Unable to initialize Plasmo Voice phone call addon", throwable);
+            Minedevice.LOGGER.warn("Unable to initialize Plasmo Voice phone call addon", throwable);
         }
     }
 
@@ -49,7 +49,7 @@ public final class PhoneCallVoiceHook {
         try {
             deviceOptional = voiceClient.getDeviceManager().getInputDevice();
         } catch (Throwable throwable) {
-            MegaphoneMod.LOGGER.debug("Unable to access Plasmo Voice input device for phone calls", throwable);
+            Minedevice.LOGGER.debug("Unable to access Plasmo Voice input device for phone calls", throwable);
             detach();
             return;
         }
@@ -75,7 +75,7 @@ public final class PhoneCallVoiceHook {
         try {
             attachedDevice.removeFilter(FILTER);
         } catch (Throwable throwable) {
-            MegaphoneMod.LOGGER.debug("Failed to remove phone call filter", throwable);
+            Minedevice.LOGGER.debug("Failed to remove phone call filter", throwable);
         } finally {
             attachedDevice = null;
         }
@@ -92,7 +92,7 @@ public final class PhoneCallVoiceHook {
         try {
             PlasmoVoiceClient.getAddonsLoader().unload(addon);
         } catch (Throwable throwable) {
-            MegaphoneMod.LOGGER.debug("Failed to unload Plasmo Voice phone call addon", throwable);
+            Minedevice.LOGGER.debug("Failed to unload Plasmo Voice phone call addon", throwable);
         } finally {
             addonLoaded = false;
             addon = null;
@@ -118,7 +118,7 @@ public final class PhoneCallVoiceHook {
             }
             return device.getFilters().contains(FILTER);
         } catch (Throwable throwable) {
-            MegaphoneMod.LOGGER.debug("Failed to attach phone call filter", throwable);
+            Minedevice.LOGGER.debug("Failed to attach phone call filter", throwable);
             return false;
         }
     }
