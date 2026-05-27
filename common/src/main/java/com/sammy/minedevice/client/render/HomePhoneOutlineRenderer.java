@@ -12,9 +12,13 @@ public final class HomePhoneOutlineRenderer {
     private static final float COLOR = 0.0F;
     private static final float ALPHA = 0.4F;
     private static final Cuboid[] CUBOIDS = new Cuboid[]{
-            new Cuboid(2.0F, 0.0F, 4.0F, 14.0F, 2.0F, 12.0F, -22.5F, 7.0F, 3.0F, 5.0F),
-            new Cuboid(10.2F, 0.5F, 2.2F, 12.8F, 2.5F, 12.2F, -22.5F, 6.0F, 5.0F, 4.0F),
-            new Cuboid(3.0F, 0.0F, 9.0F, 13.0F, 3.0F, 12.0F, 0.0F, 0.0F, 0.0F, 0.0F)
+            new Cuboid(2.0F, 0.0F, 4.7F, 14.0F, 2.0F, 12.0F, -22.5F, 7.0F, 3.0F, 5.0F),
+            new Cuboid(3.0F, 0.0F, 6.0F, 13.0F, 1.0F, 8.0F, 0.0F, 0.0F, 0.0F, 0.0F),
+            new Cuboid(3.0F, 0.0F, 8.0F, 13.0F, 1.6F, 9.0F, 0.0F, 0.0F, 0.0F, 0.0F),
+            new Cuboid(3.0F, 0.0F, 9.0F, 13.0F, 3.0F, 12.0F, 0.0F, 0.0F, 0.0F, 0.0F),
+            new Cuboid(10.25F, 0.275F, 2.2F, 12.65F, 1.05F, 4.7F, -22.5F, 5.95F, 5.15F, 4.0F),
+            new Cuboid(10.25F, 1.05F, 2.2F, 12.65F, 2.65F, 12.2F, -22.5F, 5.95F, 5.15F, 4.0F),
+            new Cuboid(10.25F, 0.25F, 9.2F, 12.65F, 1.05F, 12.2F, -22.5F, 5.95F, 5.15F, 4.0F)
     };
     private static final int[][] EDGES = new int[][]{
             {0, 1}, {0, 2}, {0, 4},

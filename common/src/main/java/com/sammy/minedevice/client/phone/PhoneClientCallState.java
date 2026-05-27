@@ -8,6 +8,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 
 public final class PhoneClientCallState {
     private static CallSnapshot mobileState = CallSnapshot.idle();
@@ -17,22 +18,31 @@ public final class PhoneClientCallState {
     }
 
     public static void apply(PhoneCallState nextState, String nextNumber, String nextName) {
-        mobileState = mobileState.next(nextState, nextNumber, nextName);
+        apply(nextState, nextNumber, nextName, null);
+    }
+
+    public static void apply(PhoneCallState nextState, String nextNumber, String nextName, UUID nextProfileId) {
+        mobileState = mobileState.next(nextState, nextNumber, nextName, nextProfileId);
     }
 
     public static void applyHomePhone(BlockPos blockPos, PhoneCallState nextState, String nextNumber, String nextName) {
+        applyHomePhone(blockPos, nextState, nextNumber, nextName, null);
+    }
+
+    public static void applyHomePhone(BlockPos blockPos, PhoneCallState nextState, String nextNumber, String nextName,
+                                      UUID nextProfileId) {
         if (blockPos == null) {
-            apply(nextState, nextNumber, nextName);
+            apply(nextState, nextNumber, nextName, nextProfileId);
             return;
         }
 
         BlockPos key = blockPos.immutable();
         CallSnapshot previous = homePhoneStates.getOrDefault(key, CallSnapshot.idle());
-        homePhoneStates.put(key, previous.next(nextState, nextNumber, nextName));
+        homePhoneStates.put(key, previous.next(nextState, nextNumber, nextName, nextProfileId));
     }
 
     public static void clear() {
-        mobileState = mobileState.next(PhoneCallState.IDLE, "", "");
+        mobileState = mobileState.next(PhoneCallState.IDLE, "", "", null);
         homePhoneStates.clear();
     }
 
@@ -64,6 +74,14 @@ public final class PhoneClientCallState {
 
     public static String getOtherName(BlockPos blockPos) {
         return snapshot(blockPos).otherName();
+    }
+
+    public static UUID getOtherProfileId() {
+        return mobileState.otherProfileId();
+    }
+
+    public static UUID getOtherProfileId(BlockPos blockPos) {
+        return snapshot(blockPos).otherProfileId();
     }
 
     public static long getRevision() {
@@ -117,23 +135,26 @@ public final class PhoneClientCallState {
         return (int) Math.min(Integer.MAX_VALUE, (elapsedMillis * 20L) / 1000L);
     }
 
-    private record CallSnapshot(PhoneCallState state, String otherNumber, String otherName,
+    private record CallSnapshot(PhoneCallState state, String otherNumber, String otherName, UUID otherProfileId,
                                 long revision, long connectedSinceMillis) {
         private static CallSnapshot idle() {
-            return new CallSnapshot(PhoneCallState.IDLE, "", "", 0L, -1L);
+            return new CallSnapshot(PhoneCallState.IDLE, "", "", null, 0L, -1L);
         }
 
-        private CallSnapshot next(PhoneCallState nextState, String nextNumber, String nextName) {
+        private CallSnapshot next(PhoneCallState nextState, String nextNumber, String nextName, UUID nextProfileId) {
             PhoneCallState normalizedState = nextState == null ? PhoneCallState.IDLE : nextState;
             String normalizedNumber = PhoneData.normalizePhoneNumber(nextNumber);
             String normalizedName = nextName == null ? "" : nextName;
+            UUID normalizedProfileId = normalizedState == PhoneCallState.IDLE ? null : nextProfileId;
 
             long nextConnectedSinceMillis = connectedSinceMillis;
             if (normalizedState != PhoneCallState.CONNECTED) {
                 nextConnectedSinceMillis = -1L;
             } else {
                 boolean enteringConnected = state != PhoneCallState.CONNECTED;
-                boolean peerChanged = !otherNumber.equals(normalizedNumber) || !otherName.equals(normalizedName);
+                boolean peerChanged = !otherNumber.equals(normalizedNumber)
+                        || !otherName.equals(normalizedName)
+                        || !java.util.Objects.equals(otherProfileId, normalizedProfileId);
                 if (enteringConnected || peerChanged || connectedSinceMillis < 0L) {
                     nextConnectedSinceMillis = System.currentTimeMillis();
                 }
@@ -143,6 +164,7 @@ public final class PhoneClientCallState {
                     normalizedState,
                     normalizedNumber,
                     normalizedName,
+                    normalizedProfileId,
                     revision + 1L,
                     nextConnectedSinceMillis);
         }

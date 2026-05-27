@@ -11,6 +11,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 public final class PhonePendingMessageStore extends SavedData {
     private static final String DATA_NAME = "minedevice_phone_pending_messages";
@@ -23,10 +24,14 @@ public final class PhonePendingMessageStore extends SavedData {
     private static final String MESSAGE_TEXT_TAG = "text";
     private static final int MAX_PENDING_PER_RECIPIENT = 64;
 
-    private final Map<UUID, List<PendingMessage>> messagesByRecipient = new HashMap<>();
+    private final Map<UUID, List<PendingMessage>> messagesByRecipient = new ConcurrentHashMap<>();
 
     public static PhonePendingMessageStore get(MinecraftServer server) {
         if (server == null) {
+            return new PhonePendingMessageStore();
+        }
+
+        if (ChatStorageManager.isAvailable()) {
             return new PhonePendingMessageStore();
         }
 
@@ -97,6 +102,14 @@ public final class PhonePendingMessageStore extends SavedData {
             return false;
         }
 
+        if (ChatStorageManager.isAvailable()) {
+            ChatStorageManager.getInstance().addMessage(
+                recipientId, normalizedNumber, normalizedMessage, true,
+                sanitizeSenderName(senderName, normalizedNumber), senderProfileId
+            );
+            return true;
+        }
+
         List<PendingMessage> messages = messagesByRecipient.computeIfAbsent(recipientId, ignored -> new ArrayList<>());
         messages.add(new PendingMessage(
                 sanitizeSenderName(senderName, normalizedNumber),
@@ -127,6 +140,11 @@ public final class PhonePendingMessageStore extends SavedData {
             return false;
         }
 
+        if (ChatStorageManager.isAvailable()) {
+            ChatStorageManager.getInstance().removeConversation(recipientId, normalizedNumber);
+            return true;
+        }
+
         List<PendingMessage> messages = messagesByRecipient.get(recipientId);
         if (messages == null || messages.isEmpty()) {
             return false;
@@ -146,6 +164,11 @@ public final class PhonePendingMessageStore extends SavedData {
 
     public void clearPendingMessages(UUID recipientId) {
         if (recipientId == null) {
+            return;
+        }
+
+        if (ChatStorageManager.isAvailable()) {
+            ChatStorageManager.getInstance().clearCacheForPlayer(recipientId);
             return;
         }
 

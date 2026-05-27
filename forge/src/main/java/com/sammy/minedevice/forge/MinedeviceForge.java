@@ -11,10 +11,10 @@ import net.minecraftforge.eventbus.api.IEventBus;
 
 @Mod(Minedevice.MOD_ID)
 public final class MinedeviceForge {
-    public MinedeviceForge() {
-        IEventBus modEventBus = FMLJavaModLoadingContext.get().getModEventBus();
+    public MinedeviceForge(FMLJavaModLoadingContext context) {
+        IEventBus modEventBus = context.getModEventBus();
         EventBuses.registerModEventBus(Minedevice.MOD_ID, modEventBus);
         Minedevice.init();
-        DistExecutor.safeRunWhenOn(Dist.CLIENT, () -> MinedeviceForgeClient::register);
+        DistExecutor.safeRunWhenOn(Dist.CLIENT, () -> () -> MinedeviceForgeClient.register(modEventBus));
     }
 }

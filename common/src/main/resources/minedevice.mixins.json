@@ -9,7 +9,9 @@
     "client.GuiMixin",
     "client.HumanoidModelMixin",
     "client.ItemInHandLayerMixin",
-    "client.LevelRendererMixin"
+    "client.KeyboardInputMixin",
+    "client.LevelRendererMixin",
+    "client.LocalPlayerMixin"
   ],
   "mixins": [
     "PlayerMixin"

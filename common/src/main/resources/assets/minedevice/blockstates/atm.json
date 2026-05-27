@@ -1,0 +1,34 @@
+{
+  "variants": {
+    "facing=north,part=0": {
+      "model": "minedevice:block/atm_a"
+    },
+    "facing=north,part=1": {
+      "model": "minedevice:block/atm_b"
+    },
+    "facing=east,part=0": {
+      "model": "minedevice:block/atm_a",
+      "y": 90
+    },
+    "facing=east,part=1": {
+      "model": "minedevice:block/atm_b",
+      "y": 90
+    },
+    "facing=south,part=0": {
+      "model": "minedevice:block/atm_a",
+      "y": 180
+    },
+    "facing=south,part=1": {
+      "model": "minedevice:block/atm_b",
+      "y": 180
+    },
+    "facing=west,part=0": {
+      "model": "minedevice:block/atm_a",
+      "y": 270
+    },
+    "facing=west,part=1": {
+      "model": "minedevice:block/atm_b",
+      "y": 270
+    }
+  }
+}

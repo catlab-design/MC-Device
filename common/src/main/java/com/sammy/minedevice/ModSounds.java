@@ -18,6 +18,16 @@ public final class ModSounds {
             () -> SoundEvent.createVariableRangeEvent(new ResourceLocation(Minedevice.MOD_ID, "phone_ring")));
     public static final RegistrySupplier<SoundEvent> PHONE_DIALING = SOUNDS.register("phone_dialing",
             () -> SoundEvent.createVariableRangeEvent(new ResourceLocation(Minedevice.MOD_ID, "phone_dialing")));
+    public static final RegistrySupplier<SoundEvent> AIRSTRIKE_TARGET_LOCKED_EN_US = SOUNDS.register("airstrike_target_locked_en_us",
+            () -> SoundEvent.createVariableRangeEvent(new ResourceLocation(Minedevice.MOD_ID, "airstrike_target_locked_en_us")));
+    public static final RegistrySupplier<SoundEvent> AIRSTRIKE_TARGET_LOCKED_TH_TH = SOUNDS.register("airstrike_target_locked_th_th",
+            () -> SoundEvent.createVariableRangeEvent(new ResourceLocation(Minedevice.MOD_ID, "airstrike_target_locked_th_th")));
+    public static final RegistrySupplier<SoundEvent> WALKIE_ON_YOU = SOUNDS.register("walkie_on_you",
+            () -> SoundEvent.createVariableRangeEvent(new ResourceLocation(Minedevice.MOD_ID, "walkie_on_you")));
+    public static final RegistrySupplier<SoundEvent> WALKIE_CLOSE = SOUNDS.register("walkie_close",
+            () -> SoundEvent.createVariableRangeEvent(new ResourceLocation(Minedevice.MOD_ID, "walkie_close")));
+    public static final RegistrySupplier<SoundEvent> WALKIE_TALK = SOUNDS.register("walkie_talk",
+            () -> SoundEvent.createVariableRangeEvent(new ResourceLocation(Minedevice.MOD_ID, "walkie_talk")));
 
     private ModSounds() {
     }

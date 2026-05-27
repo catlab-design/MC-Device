@@ -4,11 +4,19 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.sammy.minedevice.ModBlocks;
 import com.sammy.minedevice.block.HomePhoneBlock;
+import com.sammy.minedevice.client.airstrike.AirstrikeClientState;
 import com.sammy.minedevice.client.render.HomePhoneOutlineRenderer;
+import com.sammy.minedevice.client.render.AirstrikeTargetRenderer;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.Camera;
+import net.minecraft.client.renderer.GameRenderer;
+import net.minecraft.client.renderer.LightTexture;
 import net.minecraft.client.renderer.LevelRenderer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.Vec3;
+import org.joml.Matrix4f;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -33,5 +41,20 @@ public abstract class LevelRendererMixin {
                 cameraY,
                 cameraZ);
         ci.cancel();
+    }
+
+    @Inject(method = "renderLevel", at = @At("TAIL"))
+    private void minedevice$renderAirstrikeTarget(PoseStack poseStack, float partialTick, long finishNanoTime,
+                                                  boolean drawBlockOutline, Camera camera, GameRenderer gameRenderer,
+                                                  LightTexture lightTexture, Matrix4f projectionMatrix,
+                                                  CallbackInfo ci) {
+        java.util.List<Vec3> renderPositions = AirstrikeClientState.getRenderPositions(Minecraft.getInstance());
+        if (renderPositions.isEmpty()) {
+            return;
+        }
+
+        for (Vec3 renderPosition : renderPositions) {
+            AirstrikeTargetRenderer.render(poseStack, camera, renderPosition.x, renderPosition.y, renderPosition.z);
+        }
     }
 }

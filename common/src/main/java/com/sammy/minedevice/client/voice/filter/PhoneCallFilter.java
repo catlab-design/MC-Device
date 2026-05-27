@@ -5,14 +5,13 @@ import su.plo.voice.api.client.audio.filter.AudioFilterContext;
 
 public final class PhoneCallFilter implements AudioFilter {
     private static final float TWO_PI = (float) (Math.PI * 2.0D);
-    private static final float HIGH_PASS_HZ = 650.0F;
-    private static final float LOW_PASS_HZ = 2850.0F;
-    private static final float PRE_EMPHASIS = 0.72F;
-    private static final float DRIVE_GAIN = 1.28F;
-    private static final float SOFT_CLIP_THRESHOLD = 0.48F;
-    private static final float BIT_CRUSH_STEPS = 220.0F;
-    private static final float STATIC_MIX = 0.018F;
-    private static final float OUTPUT_GAIN = 0.92F;
+    private static final float HIGH_PASS_HZ = 280.0F;
+    private static final float LOW_PASS_HZ = 3400.0F;
+    private static final float PRE_EMPHASIS = 0.28F;
+    private static final float DRIVE_GAIN = 1.38F;
+    private static final float SOFT_CLIP_THRESHOLD = 0.92F;
+    private static final float STATIC_MIX = 0.0015F;
+    private static final float OUTPUT_GAIN = 2.25F;
     private static final float TO_FLOAT = 1.0F / 32768.0F;
 
     private float sampleRate = -1.0F;
@@ -53,8 +52,7 @@ public final class PhoneCallFilter implements AudioFilter {
 
             float driven = lowPass * DRIVE_GAIN;
             float clipped = applySoftClip(driven, SOFT_CLIP_THRESHOLD);
-            float crushed = applyBitCrush(clipped, BIT_CRUSH_STEPS);
-            float noisy = crushed + nextStaticSample() * STATIC_MIX;
+            float noisy = clipped + nextStaticSample() * STATIC_MIX;
             samples[i] = toShort(noisy * OUTPUT_GAIN);
         }
 
@@ -117,14 +115,6 @@ public final class PhoneCallFilter implements AudioFilter {
         float sign = Math.signum(input);
         float over = (Math.abs(input) - threshold) / Math.max(0.0001F, 1.0F - threshold);
         return sign * (threshold + (1.0F - threshold) * (float) Math.tanh(over));
-    }
-
-    private static float applyBitCrush(float input, float steps) {
-        if (steps <= 0.0F) {
-            return input;
-        }
-
-        return Math.round(input * steps) / steps;
     }
 
     private static short toShort(float input) {

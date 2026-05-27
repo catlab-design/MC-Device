@@ -3,6 +3,18 @@
   "overrides": [
     {
       "predicate": {
+        "minedevice:bank_qr": 1.0
+      },
+      "model": "minedevice:item/phone_3d_qr"
+    },
+    {
+      "predicate": {
+        "minedevice:screen_on": 1.0
+      },
+      "model": "minedevice:item/phone_3d_on"
+    },
+    {
+      "predicate": {
         "minedevice:call_pose": 1.0
       },
       "model": "minedevice:item/phone_3d_call"

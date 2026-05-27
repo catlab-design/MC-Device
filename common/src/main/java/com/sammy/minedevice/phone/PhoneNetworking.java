@@ -1,6 +1,7 @@
 package com.sammy.minedevice.phone;
 
 import com.sammy.minedevice.Minedevice;
+import com.sammy.minedevice.atm.AtmAccountStore;
 import com.sammy.minedevice.block.entity.HomePhoneBlockEntity;
 import com.sammy.minedevice.block.entity.HomePhoneRegistry;
 import dev.architectury.event.events.common.PlayerEvent;
@@ -14,13 +15,17 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.ItemStack;
 
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 public final class PhoneNetworking {
     public static final ResourceLocation CALL_STATE_SYNC = id("phone_call_state_sync");
+    public static final ResourceLocation PHONE_TOAST = id("phone_toast");
     public static final ResourceLocation HOME_PHONE_SCREEN_OPEN = id("home_phone_screen_open");
     public static final ResourceLocation CALL_REQUEST = id("phone_call_request");
     public static final ResourceLocation CALL_ANSWER = id("phone_call_answer");
@@ -31,12 +36,26 @@ public final class PhoneNetworking {
     public static final ResourceLocation CHAT_FRIEND_ADD = id("phone_chat_friend_add");
     public static final ResourceLocation CHAT_MESSAGE_SEND = id("phone_chat_message_send");
     public static final ResourceLocation CHAT_DELETE = id("phone_chat_delete");
+    public static final ResourceLocation CHAT_STATE_SYNC = id("phone_chat_state_sync");
     public static final ResourceLocation CHAT_TOAST = id("phone_chat_toast");
     public static final ResourceLocation CHAT_STATUS_TOAST = id("phone_chat_status_toast");
     public static final ResourceLocation CHAT_CONVERSATION_DELETED = id("phone_chat_conversation_deleted");
     public static final ResourceLocation CONTACT_SAVE = id("phone_contact_save");
     public static final ResourceLocation CONTACT_DELETE = id("phone_contact_delete");
+    public static final ResourceLocation PHOTO_APPEND = id("phone_photo_append");
+    public static final ResourceLocation PHOTO_DELETE = id("phone_photo_delete");
+    public static final ResourceLocation CAMERA_POSE_UPDATE = id("phone_camera_pose_update");
+    public static final ResourceLocation SCREEN_ON_UPDATE = id("phone_screen_on_update");
+    public static final ResourceLocation BANK_SYNC_REQUEST = id("phone_bank_sync_request");
+    public static final ResourceLocation BANK_STATE_SYNC = id("phone_bank_state_sync");
+    public static final ResourceLocation BANK_TRANSFER = id("phone_bank_transfer");
+    public static final ResourceLocation BANK_RECEIVE_STATE = id("phone_bank_receive_state");
+    public static final ResourceLocation BANK_SCAN_TARGET = id("phone_bank_scan_target");
+    public static final ResourceLocation BANK_SCAN_RESULT = id("phone_bank_scan_result");
+    public static final ResourceLocation BANK_TRANSFER_RECEIPT = id("phone_bank_transfer_receipt");
     private static final int CHAT_STATUS_TOAST_LABEL_LENGTH = PhoneData.MAX_CONTACT_NAME_LENGTH + PhoneData.PHONE_NUMBER_LENGTH + 4;
+    private static final double BANK_SCAN_MAX_DISTANCE_SQR = 12.0D * 12.0D;
+    private static final Set<UUID> ACTIVE_BANK_RECEIVERS = ConcurrentHashMap.newKeySet();
     private static boolean initialized;
 
     private PhoneNetworking() {
@@ -148,29 +167,89 @@ public final class PhoneNetworking {
             context.queue(() -> deleteContact((ServerPlayer) context.getPlayer(), homePhonePos, number));
         });
 
-        PlayerEvent.PLAYER_JOIN.register(PhoneCallManager::syncPlayer);
+        NetworkManager.registerReceiver(NetworkManager.c2s(), PHOTO_APPEND, (buf, context) -> {
+            InteractionHand preferredHand = buf.readEnum(InteractionHand.class);
+            String fileName = buf.readUtf(PhonePhotoData.MAX_PHOTO_FILE_NAME_LENGTH);
+            ItemStack captureStack = buf.readItem();
+            context.queue(() -> appendPhonePhoto((ServerPlayer) context.getPlayer(), preferredHand, fileName, captureStack));
+        });
+
+        NetworkManager.registerReceiver(NetworkManager.c2s(), PHOTO_DELETE, (buf, context) -> {
+            InteractionHand preferredHand = buf.readEnum(InteractionHand.class);
+            String fileName = buf.readUtf(PhonePhotoData.MAX_PHOTO_FILE_NAME_LENGTH);
+            context.queue(() -> deletePhonePhoto((ServerPlayer) context.getPlayer(), preferredHand, fileName));
+        });
+
+        NetworkManager.registerReceiver(NetworkManager.c2s(), CAMERA_POSE_UPDATE, (buf, context) -> {
+            boolean active = buf.readBoolean();
+            boolean selfie = buf.readBoolean();
+            context.queue(() -> updateCameraPose((ServerPlayer) context.getPlayer(), active, selfie));
+        });
+
+        NetworkManager.registerReceiver(NetworkManager.c2s(), SCREEN_ON_UPDATE, (buf, context) -> {
+            boolean active = buf.readBoolean();
+            context.queue(() -> updateScreenOnState((ServerPlayer) context.getPlayer(), active));
+        });
+
+        NetworkManager.registerReceiver(NetworkManager.c2s(), BANK_SYNC_REQUEST, (buf, context) ->
+                context.queue(() -> sendBankState((ServerPlayer) context.getPlayer())));
+
+        NetworkManager.registerReceiver(NetworkManager.c2s(), BANK_TRANSFER, (buf, context) -> {
+            String number = buf.readUtf(PhoneData.PHONE_NUMBER_LENGTH);
+            long amount = buf.readVarLong();
+            context.queue(() -> transferBankMoney((ServerPlayer) context.getPlayer(), number, amount));
+        });
+
+        NetworkManager.registerReceiver(NetworkManager.c2s(), BANK_RECEIVE_STATE, (buf, context) -> {
+            boolean active = buf.readBoolean();
+            context.queue(() -> setBankReceiveState((ServerPlayer) context.getPlayer(), active));
+        });
+
+        NetworkManager.registerReceiver(NetworkManager.c2s(), BANK_SCAN_TARGET, (buf, context) -> {
+            UUID targetId = buf.readUUID();
+            context.queue(() -> scanBankPaymentTarget((ServerPlayer) context.getPlayer(), targetId));
+        });
+
+        PlayerEvent.PLAYER_JOIN.register(player -> {
+            PhoneCallManager.syncPlayer(player);
+            syncChatState(player);
+        });
         TickEvent.SERVER_PRE.register(server -> {
+            pruneBankReceivers(server);
             deliverPendingConversationDeletes(server);
             deliverPendingChatMessages(server);
         });
     }
 
     public static void sendCallState(ServerPlayer player, PhoneCallState state, String otherNumber, String otherName) {
+        sendCallState(player, state, otherNumber, otherName, null);
+    }
+
+    public static void sendCallState(ServerPlayer player, PhoneCallState state, String otherNumber, String otherName,
+                                     UUID otherProfileId) {
         FriendlyByteBuf buf = new FriendlyByteBuf(Unpooled.buffer());
         writeHomePhoneContext(buf, null);
         buf.writeEnum(state);
         buf.writeUtf(PhoneData.normalizePhoneNumber(otherNumber), PhoneData.PHONE_NUMBER_LENGTH);
         buf.writeUtf(otherName == null ? "" : otherName, PhoneData.MAX_CONTACT_NAME_LENGTH);
+        writeOptionalUuid(buf, otherProfileId);
         NetworkManager.sendToPlayer(player, CALL_STATE_SYNC, buf);
     }
 
     public static void sendHomePhoneCallState(ServerPlayer player, BlockPos homePhonePos,
                                               PhoneCallState state, String otherNumber, String otherName) {
+        sendHomePhoneCallState(player, homePhonePos, state, otherNumber, otherName, null);
+    }
+
+    public static void sendHomePhoneCallState(ServerPlayer player, BlockPos homePhonePos,
+                                              PhoneCallState state, String otherNumber, String otherName,
+                                              UUID otherProfileId) {
         FriendlyByteBuf buf = new FriendlyByteBuf(Unpooled.buffer());
         writeHomePhoneContext(buf, homePhonePos);
         buf.writeEnum(state);
         buf.writeUtf(PhoneData.normalizePhoneNumber(otherNumber), PhoneData.PHONE_NUMBER_LENGTH);
         buf.writeUtf(otherName == null ? "" : otherName, PhoneData.MAX_CONTACT_NAME_LENGTH);
+        writeOptionalUuid(buf, otherProfileId);
         NetworkManager.sendToPlayer(player, CALL_STATE_SYNC, buf);
     }
 
@@ -208,6 +287,17 @@ public final class PhoneNetworking {
         NetworkManager.sendToPlayer(player, CHAT_STATUS_TOAST, buf);
     }
 
+    public static void sendPhoneToast(ServerPlayer player, Component title, Component message) {
+        if (player == null || title == null || message == null) {
+            return;
+        }
+
+        FriendlyByteBuf buf = new FriendlyByteBuf(Unpooled.buffer());
+        buf.writeComponent(title);
+        buf.writeComponent(message);
+        NetworkManager.sendToPlayer(player, PHONE_TOAST, buf);
+    }
+
     public static void sendChatConversationDeleted(ServerPlayer player, String number) {
         if (player == null) {
             return;
@@ -216,6 +306,204 @@ public final class PhoneNetworking {
         FriendlyByteBuf buf = new FriendlyByteBuf(Unpooled.buffer());
         buf.writeUtf(PhoneData.normalizePhoneNumber(number), PhoneData.PHONE_NUMBER_LENGTH);
         NetworkManager.sendToPlayer(player, CHAT_CONVERSATION_DELETED, buf);
+    }
+
+    public static void syncChatState(ServerPlayer player) {
+        if (player == null) {
+            return;
+        }
+
+        FriendlyByteBuf buf = new FriendlyByteBuf(Unpooled.buffer());
+        PhoneChatStatePayload payload = ChatStorageManager.isAvailable()
+                ? ChatStorageManager.getInstance().createPayload(player.getUUID())
+                : new PhoneChatStatePayload(List.of(), List.of());
+        payload.write(buf);
+        NetworkManager.sendToPlayer(player, CHAT_STATE_SYNC, buf);
+    }
+
+    public static void sendBankState(ServerPlayer player) {
+        sendBankState(player, null);
+    }
+
+    private static void sendBankState(ServerPlayer player, Component status) {
+        if (player == null || player.getServer() == null) {
+            return;
+        }
+
+        FriendlyByteBuf buf = new FriendlyByteBuf(Unpooled.buffer());
+        buf.writeLong(AtmAccountStore.get(player.getServer()).getBalance(player.getUUID()));
+        buf.writeBoolean(status != null);
+        if (status != null) {
+            buf.writeComponent(status);
+        }
+        NetworkManager.sendToPlayer(player, BANK_STATE_SYNC, buf);
+    }
+
+    private static void sendBankStatus(ServerPlayer player, Component status) {
+        if (player == null || status == null) {
+            return;
+        }
+
+        player.displayClientMessage(status, true);
+        sendBankState(player, status);
+    }
+
+    private static void sendBankScanResult(ServerPlayer scanner, ServerPlayer target) {
+        if (scanner == null || target == null) {
+            return;
+        }
+
+        FriendlyByteBuf buf = new FriendlyByteBuf(Unpooled.buffer());
+        buf.writeUtf(PhoneData.getPhoneNumber(target), PhoneData.PHONE_NUMBER_LENGTH);
+        buf.writeUtf(target.getGameProfile().getName(), PhoneData.MAX_CONTACT_NAME_LENGTH);
+        NetworkManager.sendToPlayer(scanner, BANK_SCAN_RESULT, buf);
+    }
+
+    private static void sendBankTransferReceipt(ServerPlayer sender, ServerPlayer recipient, long amount, long senderBalance) {
+        if (sender == null || recipient == null) {
+            return;
+        }
+
+        FriendlyByteBuf buf = new FriendlyByteBuf(Unpooled.buffer());
+        buf.writeUtf(PhoneData.getPhoneNumber(recipient), PhoneData.PHONE_NUMBER_LENGTH);
+        buf.writeUtf(recipient.getGameProfile().getName(), PhoneData.MAX_CONTACT_NAME_LENGTH);
+        buf.writeVarLong(Math.max(0L, amount));
+        buf.writeVarLong(Math.max(0L, senderBalance));
+        NetworkManager.sendToPlayer(sender, BANK_TRANSFER_RECEIPT, buf);
+    }
+
+    private static void setBankReceiveState(ServerPlayer player, boolean active) {
+        if (player == null) {
+            return;
+        }
+
+        if (active && canUseMobileBank(player)) {
+            ACTIVE_BANK_RECEIVERS.add(player.getUUID());
+            PhoneCallPoseAccess.setPhoneBankQrPoseActive(player, true);
+        } else {
+            ACTIVE_BANK_RECEIVERS.remove(player.getUUID());
+            PhoneCallPoseAccess.setPhoneBankQrPoseActive(player, false);
+        }
+    }
+
+    private static void scanBankPaymentTarget(ServerPlayer scanner, UUID targetId) {
+        if (!canUseMobileBank(scanner) || scanner.getServer() == null || targetId == null) {
+            return;
+        }
+
+        if (scanner.getUUID().equals(targetId)) {
+            sendBankStatus(scanner, Component.translatable("screen.minedevice.phone.bank.status.self"));
+            return;
+        }
+
+        ServerPlayer target = scanner.getServer().getPlayerList().getPlayer(targetId);
+        if (target == null || !ACTIVE_BANK_RECEIVERS.contains(target.getUUID()) || !PhoneData.hasPhone(target)
+                || scanner.distanceToSqr(target) > BANK_SCAN_MAX_DISTANCE_SQR) {
+            sendBankStatus(scanner, Component.translatable("screen.minedevice.phone.bank.status.scan_failed"));
+            return;
+        }
+
+        sendBankScanResult(scanner, target);
+        sendBankStatus(scanner, Component.translatable(
+                "screen.minedevice.phone.bank.status.scan_found",
+                formatBankPlayerLabel(target, PhoneData.getPhoneNumber(target))));
+    }
+
+    private static void pruneBankReceivers(MinecraftServer server) {
+        if (server == null || ACTIVE_BANK_RECEIVERS.isEmpty()) {
+            return;
+        }
+
+        ACTIVE_BANK_RECEIVERS.removeIf(uuid -> {
+            ServerPlayer player = server.getPlayerList().getPlayer(uuid);
+            if (player == null) {
+                return true;
+            }
+
+            if (!canUseMobileBank(player)) {
+                PhoneCallPoseAccess.setPhoneBankQrPoseActive(player, false);
+                return true;
+            }
+
+            return false;
+        });
+    }
+
+    private static void transferBankMoney(ServerPlayer sender, String rawNumber, long amount) {
+        if (!canUseMobileBank(sender)) {
+            return;
+        }
+
+        String number = PhoneData.normalizePhoneNumber(rawNumber);
+        if (amount <= 0L) {
+            sendBankStatus(sender, Component.translatable("screen.minedevice.phone.bank.status.invalid_amount"));
+            return;
+        }
+
+        if (!PhoneData.isValidPhoneNumber(number) || !PhoneData.isMobilePhoneNumber(number)) {
+            sendBankStatus(sender, Component.translatable("screen.minedevice.phone.bank.status.unavailable", number));
+            return;
+        }
+
+        if (PhoneData.getPhoneNumber(sender).equals(number)) {
+            sendBankStatus(sender, Component.translatable("screen.minedevice.phone.bank.status.self"));
+            return;
+        }
+
+        ServerPlayer recipient = PhoneCallManager.findOnlineByNumber(sender.getServer(), number);
+        if (recipient == null || !PhoneData.hasPhone(recipient)) {
+            sendBankStatus(sender, Component.translatable("screen.minedevice.phone.bank.status.unavailable", number));
+            return;
+        }
+
+        AtmAccountStore store = AtmAccountStore.get(sender.getServer());
+        long balance = store.getBalance(sender.getUUID());
+        if (balance < amount) {
+            sendBankStatus(sender, Component.translatable("screen.minedevice.phone.bank.status.insufficient"));
+            return;
+        }
+
+        if (!store.withdraw(sender.getUUID(), amount)) {
+            sendBankStatus(sender, Component.translatable("screen.minedevice.phone.bank.status.insufficient"));
+            return;
+        }
+
+        long recipientBalance = store.deposit(recipient.getUUID(), amount);
+        long senderBalance = store.getBalance(sender.getUUID());
+        String recipientLabel = formatBankPlayerLabel(recipient, number);
+        String senderLabel = formatBankPlayerLabel(sender, PhoneData.getPhoneNumber(sender));
+        sendBankStatus(sender, Component.translatable(
+                "screen.minedevice.phone.bank.status.transfer_sent", amount, recipientLabel, senderBalance));
+        sendBankTransferReceipt(sender, recipient, amount, senderBalance);
+        sendPhoneToast(sender,
+                Component.translatable("toast.minedevice.phone.bank.sent.title"),
+                Component.translatable("toast.minedevice.phone.bank.sent.body", amount, recipientLabel));
+        sendBankStatus(recipient, Component.translatable(
+                "screen.minedevice.phone.bank.status.transfer_received", amount, senderLabel, recipientBalance));
+        sendPhoneToast(recipient,
+                Component.translatable("toast.minedevice.phone.bank.received.title"),
+                Component.translatable("toast.minedevice.phone.bank.received.body", amount, senderLabel));
+    }
+
+    private static boolean canUseMobileBank(ServerPlayer player) {
+        if (player == null || player.getServer() == null) {
+            return false;
+        }
+
+        if (PhoneData.hasPhone(player)) {
+            return true;
+        }
+
+        sendBankStatus(player, Component.translatable("screen.minedevice.phone.call.error.no_phone"));
+        return false;
+    }
+
+    private static String formatBankPlayerLabel(ServerPlayer player, String number) {
+        String name = player == null ? "" : player.getGameProfile().getName();
+        if (name == null || name.isBlank()) {
+            return number;
+        }
+        return name + " (" + number + ")";
     }
 
     private static void saveContact(ServerPlayer player, BlockPos homePhonePos, String rawNumber, String requestedName) {
@@ -241,12 +529,12 @@ public final class PhoneNetworking {
             return;
         }
 
-        ItemStack phoneStack = PhoneData.findPhoneStack(player);
-        if (phoneStack.isEmpty()) {
+        if (!PhoneData.hasPhone(player)) {
             player.sendSystemMessage(Component.translatable("screen.minedevice.phone.call.error.no_phone"));
             return;
         }
 
+        ItemStack phoneStack = PhoneData.findPhoneStack(player);
         if (PhoneData.saveContact(phoneStack, contactName, number)) {
             PhoneData.markDirty(player);
             player.sendSystemMessage(Component.translatable(
@@ -279,6 +567,54 @@ public final class PhoneNetworking {
             player.sendSystemMessage(Component.translatable(
                     "screen.minedevice.phone.call.contacts.deleted", number));
         }
+    }
+
+    private static void appendPhonePhoto(ServerPlayer player, InteractionHand preferredHand,
+                                         String photoFileName, ItemStack captureStack) {
+        if (player == null || photoFileName == null || photoFileName.isBlank()) {
+            return;
+        }
+
+        ItemStack phoneStack = PhoneData.findPhoneStack(player, preferredHand);
+        if (phoneStack.isEmpty()) {
+            return;
+        }
+
+        if (PhonePhotoData.appendPhoto(phoneStack, photoFileName, captureStack)) {
+            PhoneData.markDirty(player);
+        }
+    }
+
+    private static void deletePhonePhoto(ServerPlayer player, InteractionHand preferredHand, String photoFileName) {
+        if (player == null || photoFileName == null || photoFileName.isBlank()) {
+            return;
+        }
+
+        ItemStack phoneStack = PhoneData.findPhoneStack(player, preferredHand);
+        if (phoneStack.isEmpty()) {
+            return;
+        }
+
+        if (PhonePhotoData.removePhotoByFileName(phoneStack, photoFileName)) {
+            PhoneData.markDirty(player);
+        }
+    }
+
+    private static void updateCameraPose(ServerPlayer player, boolean active, boolean selfie) {
+        if (player == null) {
+            return;
+        }
+
+        PhoneCallPoseAccess.setPhoneCameraPoseActive(player, active);
+        PhoneCallPoseAccess.setPhoneCameraSelfieActive(player, active && selfie);
+    }
+
+    private static void updateScreenOnState(ServerPlayer player, boolean active) {
+        if (player == null) {
+            return;
+        }
+
+        PhoneCallPoseAccess.setPhoneScreenOnActive(player, active && PhoneData.hasPhone(player));
     }
 
     private static void addChatFriend(ServerPlayer player, String rawNumber) {
@@ -317,8 +653,8 @@ public final class PhoneNetworking {
 
         String resolvedName = target.getGameProfile().getName();
         UUID targetUuid = target.getUUID();
-        if (PhoneChatData.addFriend(phoneStack, resolvedName, number, targetUuid)) {
-            PhoneData.markDirty(player);
+        if (PhoneChatData.addFriend(ItemStack.EMPTY, resolvedName, number, targetUuid, player)) {
+            syncChatState(player);
             sendChatStatusToast(player, true, number, formatChatLabel(resolvedName, number));
         }
     }
@@ -351,35 +687,39 @@ public final class PhoneNetworking {
             return;
         }
 
-        ItemStack senderPhone = PhoneData.findPhoneStack(sender);
-        if (senderPhone.isEmpty()) {
+        if (!PhoneData.hasPhone(sender)) {
             sender.sendSystemMessage(Component.translatable("screen.minedevice.phone.call.error.no_phone"));
             return;
         }
 
         ServerPlayer receiver = PhoneCallManager.findOnlineByNumber(sender.getServer(), number);
-        UUID receiverProfileId = receiver == null ? PhoneChatData.getFriendProfileId(senderPhone, number) : receiver.getUUID();
+        UUID receiverProfileId = receiver == null ? PhoneChatData.getFriendProfileId(ItemStack.EMPTY, number, sender) : receiver.getUUID();
         if (receiverProfileId == null) {
             sender.sendSystemMessage(Component.translatable("screen.minedevice.phone.chat.error.unavailable", number));
             return;
         }
 
         String receiverName = receiver == null
-                ? PhoneChatData.getFriendName(senderPhone, number)
+                ? PhoneChatData.getFriendName(ItemStack.EMPTY, number, sender)
                 : receiver.getGameProfile().getName();
         if (receiverName == null || receiverName.isBlank()) {
             receiverName = number;
         }
         String senderName = sender.getGameProfile().getName();
-        boolean senderSaved = PhoneChatData.appendMessage(senderPhone, receiverName, number, message, false, receiverProfileId);
+        boolean senderSaved = PhoneChatData.appendMessage(ItemStack.EMPTY, receiverName, number, message, false, receiverProfileId, sender);
         boolean receiverSaved = storeOrDeliverChatMessage(sender.getServer(), receiver, receiverProfileId, senderName, ownNumber, sender.getUUID(), message);
         if (!senderSaved || !receiverSaved) {
             sender.sendSystemMessage(Component.translatable("screen.minedevice.phone.chat.error.send_failed"));
             return;
         }
 
-        PhoneData.markDirty(sender);
+        syncChatState(sender);
         sender.sendSystemMessage(Component.translatable("screen.minedevice.phone.status.chat_sent"));
+        sendPhoneToast(sender,
+                Component.translatable("toast.minedevice.phone.chat.sent.title"),
+                Component.translatable("toast.minedevice.phone.chat.sent.body",
+                        Component.literal(formatChatLabel(receiverName, number)),
+                        message));
         if (receiver != null && PhoneData.hasPhone(receiver)) {
             receiver.sendSystemMessage(Component.translatable(
                     "screen.minedevice.phone.chat.status.incoming_from",
@@ -410,15 +750,15 @@ public final class PhoneNetworking {
             return;
         }
 
-        ItemStack phoneStack = PhoneData.findPhoneStack(player);
-        if (phoneStack.isEmpty()) {
+        if (!PhoneData.hasPhone(player)) {
             player.sendSystemMessage(Component.translatable("screen.minedevice.phone.call.error.no_phone"));
             return;
         }
 
-        UUID otherProfileId = PhoneChatData.getFriendProfileId(phoneStack, number);
-        PhoneChatData.removeConversation(phoneStack, number);
-        PhoneData.markDirty(player);
+        UUID otherProfileId = PhoneChatData.getFriendProfileId(ItemStack.EMPTY, number, player);
+        PhoneChatData.removeConversation(ItemStack.EMPTY, number, player);
+        sendChatConversationDeleted(player, number);
+        syncChatState(player);
 
         MinecraftServer server = player.getServer();
         if (server == null) {
@@ -449,11 +789,10 @@ public final class PhoneNetworking {
         }
 
         if (receiver != null) {
-            ItemStack receiverPhone = PhoneData.findPhoneStack(receiver);
-            if (!receiverPhone.isEmpty()) {
-                boolean receiverSaved = PhoneChatData.appendMessage(receiverPhone, senderName, senderNumber, message, true, senderProfileId);
+            if (PhoneData.hasPhone(receiver)) {
+                boolean receiverSaved = PhoneChatData.appendMessage(ItemStack.EMPTY, senderName, senderNumber, message, true, senderProfileId, receiver);
                 if (receiverSaved) {
-                    PhoneData.markDirty(receiver);
+                    syncChatState(receiver);
                     sendChatToast(receiver, senderName, senderNumber, message);
                 }
                 return receiverSaved;
@@ -469,16 +808,15 @@ public final class PhoneNetworking {
             return;
         }
 
-        ItemStack phoneStack = PhoneData.findPhoneStack(player);
-        if (phoneStack.isEmpty()) {
+        if (!PhoneData.hasPhone(player)) {
             return;
         }
 
-        if (!PhoneChatData.removeConversation(phoneStack, otherNumber)) {
+        if (!PhoneChatData.removeConversation(ItemStack.EMPTY, otherNumber, player)) {
             return;
         }
 
-        PhoneData.markDirty(player);
+        syncChatState(player);
         sendChatConversationDeleted(player, otherNumber);
     }
 
@@ -502,8 +840,7 @@ public final class PhoneNetworking {
             return;
         }
 
-        ItemStack phoneStack = PhoneData.findPhoneStack(player);
-        if (phoneStack.isEmpty()) {
+        if (!PhoneData.hasPhone(player)) {
             return;
         }
 
@@ -513,11 +850,11 @@ public final class PhoneNetworking {
         }
 
         for (String number : pendingDeletes) {
-            PhoneChatData.removeConversation(phoneStack, number);
+            PhoneChatData.removeConversation(ItemStack.EMPTY, number, player);
             sendChatConversationDeleted(player, number);
         }
 
-        PhoneData.markDirty(player);
+        syncChatState(player);
         store.clearPendingDeletes(player.getUUID());
     }
 
@@ -541,8 +878,7 @@ public final class PhoneNetworking {
             return;
         }
 
-        ItemStack phoneStack = PhoneData.findPhoneStack(player);
-        if (phoneStack.isEmpty()) {
+        if (!PhoneData.hasPhone(player)) {
             return;
         }
 
@@ -553,20 +889,21 @@ public final class PhoneNetworking {
 
         for (PhonePendingMessageStore.PendingMessage pendingMessage : pendingMessages) {
             boolean delivered = PhoneChatData.appendMessage(
-                    phoneStack,
+                    ItemStack.EMPTY,
                     pendingMessage.senderName(),
                     pendingMessage.senderNumber(),
                     pendingMessage.messageText(),
                     true,
-                    pendingMessage.senderProfileId()
+                    pendingMessage.senderProfileId(),
+                    player
             );
             if (!delivered) {
                 return;
             }
         }
 
-        PhoneData.markDirty(player);
         store.clearPendingMessages(player.getUUID());
+        syncChatState(player);
         for (PhonePendingMessageStore.PendingMessage pendingMessage : pendingMessages) {
             sendChatToast(player, pendingMessage.senderName(), pendingMessage.senderNumber(), pendingMessage.messageText());
         }
@@ -606,6 +943,13 @@ public final class PhoneNetworking {
         buf.writeBoolean(homePhone);
         if (homePhone) {
             buf.writeBlockPos(homePhonePos);
+        }
+    }
+
+    private static void writeOptionalUuid(FriendlyByteBuf buf, UUID uuid) {
+        buf.writeBoolean(uuid != null);
+        if (uuid != null) {
+            buf.writeUUID(uuid);
         }
     }
 

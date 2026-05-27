@@ -12,7 +12,7 @@ description = '''
 
 Adds mobile and home phone devices with calling, chat, camera, and optional voice features.
 '''
-#logoFile = ""
+logoFile = "mc_device.png"
 
 [[dependencies.minedevice]]
 modId = "forge"
@@ -41,3 +41,10 @@ mandatory = false
 versionRange = "[0,)"
 ordering = "AFTER"
 side = "CLIENT"
+
+[[dependencies.minedevice]]
+modId = "voicechat"
+mandatory = false
+versionRange = "[0,)"
+ordering = "AFTER"
+side = "BOTH"

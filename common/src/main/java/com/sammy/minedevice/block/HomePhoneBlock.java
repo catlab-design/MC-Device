@@ -39,8 +39,11 @@ public final class HomePhoneBlock extends HorizontalDirectionalBlock implements 
     public static final DirectionProperty FACING = BlockStateProperties.HORIZONTAL_FACING;
     public static final BooleanProperty HAS_HANDSET = BooleanProperty.create("has_handset");
     private static final double[][] OUTLINE_BOXES = new double[][]{
-            {2.0D, 0.0D, 4.45D, 14.0D, 4.75D, 12.65D},
-            {10.2D, 0.15D, 3.30D, 12.8D, 5.85D, 13.30D}
+            {2.0D, 0.0D, 4.7D, 14.0D, 4.6D, 6.8D},
+            {2.4D, 0.0D, 6.8D, 13.6D, 3.8D, 8.7D},
+            {2.8D, 0.0D, 8.7D, 13.2D, 2.9D, 10.4D},
+            {3.0D, 0.0D, 10.4D, 13.0D, 2.2D, 12.0D},
+            {10.25D, 0.25D, 2.2D, 12.65D, 3.4D, 12.2D}
     };
     private static final VoxelShape NORTH_SHAPE = buildShape(Direction.NORTH);
     private static final VoxelShape EAST_SHAPE = buildShape(Direction.EAST);

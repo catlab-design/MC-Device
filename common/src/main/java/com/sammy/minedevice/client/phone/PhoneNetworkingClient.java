@@ -18,6 +18,8 @@ import net.minecraft.client.resources.sounds.SoundInstance;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.entity.player.Player;
 
 import java.util.UUID;
@@ -32,6 +34,11 @@ public final class PhoneNetworkingClient {
     private static final Map<BlockPos, HomePhoneDialingSound> activeHomeDialingRings = new HashMap<>();
     private static MobilePhoneRingSound mobileIncomingRing;
     private static LoopingPhoneUiSound mobileDialingRing;
+    private static boolean lastCameraPoseActive;
+    private static boolean lastCameraPoseSelfie;
+    private static boolean cameraPoseInitialized;
+    private static boolean lastScreenOnActive;
+    private static boolean screenOnInitialized;
 
     private PhoneNetworkingClient() {
     }
@@ -48,12 +55,13 @@ public final class PhoneNetworkingClient {
             PhoneCallState state = buf.readEnum(PhoneCallState.class);
             String otherNumber = buf.readUtf(PhoneData.PHONE_NUMBER_LENGTH);
             String otherName = buf.readUtf(PhoneData.MAX_CONTACT_NAME_LENGTH);
+            UUID otherProfileId = buf.readBoolean() ? buf.readUUID() : null;
             context.queue(() -> {
                 PhoneCallState previousState = PhoneClientCallState.getState(blockPos);
                 if (homePhone) {
-                    PhoneClientCallState.applyHomePhone(blockPos, state, otherNumber, otherName);
+                    PhoneClientCallState.applyHomePhone(blockPos, state, otherNumber, otherName, otherProfileId);
                 } else {
-                    PhoneClientCallState.apply(state, otherNumber, otherName);
+                    PhoneClientCallState.apply(state, otherNumber, otherName, otherProfileId);
                 }
 
                 if (state == PhoneCallState.INCOMING_RINGING && previousState != PhoneCallState.INCOMING_RINGING) {
@@ -83,6 +91,11 @@ public final class PhoneNetworkingClient {
             });
         });
 
+        NetworkManager.registerReceiver(NetworkManager.s2c(), PhoneNetworking.CHAT_STATE_SYNC, (buf, context) -> {
+            var payload = com.sammy.minedevice.phone.PhoneChatStatePayload.read(buf);
+            context.queue(() -> PhoneClientChatState.apply(payload));
+        });
+
         NetworkManager.registerReceiver(NetworkManager.s2c(), PhoneNetworking.CHAT_STATUS_TOAST, (buf, context) -> {
             boolean success = buf.readBoolean();
             String number = buf.readUtf(PhoneData.PHONE_NUMBER_LENGTH);
@@ -105,6 +118,12 @@ public final class PhoneNetworkingClient {
             });
         });
 
+        NetworkManager.registerReceiver(NetworkManager.s2c(), PhoneNetworking.PHONE_TOAST, (buf, context) -> {
+            Component title = buf.readComponent();
+            Component message = buf.readComponent();
+            context.queue(() -> showPhoneToast(title, message));
+        });
+
         NetworkManager.registerReceiver(NetworkManager.s2c(), PhoneNetworking.CHAT_CONVERSATION_DELETED, (buf, context) -> {
             String number = buf.readUtf(PhoneData.PHONE_NUMBER_LENGTH);
             context.queue(() -> {
@@ -120,12 +139,50 @@ public final class PhoneNetworkingClient {
             context.queue(() -> PhoneClientHooks.openHomePhoneScreen(blockPos));
         });
 
+        NetworkManager.registerReceiver(NetworkManager.s2c(), PhoneNetworking.BANK_STATE_SYNC, (buf, context) -> {
+            long balance = buf.readLong();
+            Component status = buf.readBoolean() ? buf.readComponent() : Component.empty();
+            context.queue(() -> {
+                Minecraft minecraft = Minecraft.getInstance();
+                if (minecraft != null && minecraft.screen instanceof PhoneScreen phoneScreen) {
+                    phoneScreen.handleBankState(balance, status);
+                }
+            });
+        });
+
+        NetworkManager.registerReceiver(NetworkManager.s2c(), PhoneNetworking.BANK_SCAN_RESULT, (buf, context) -> {
+            String targetNumber = buf.readUtf(PhoneData.PHONE_NUMBER_LENGTH);
+            String targetName = buf.readUtf(PhoneData.MAX_CONTACT_NAME_LENGTH);
+            context.queue(() -> {
+                Minecraft minecraft = Minecraft.getInstance();
+                if (minecraft != null && minecraft.screen instanceof PhoneScreen phoneScreen) {
+                    phoneScreen.handleBankScanResult(targetNumber, targetName);
+                }
+            });
+        });
+
+        NetworkManager.registerReceiver(NetworkManager.s2c(), PhoneNetworking.BANK_TRANSFER_RECEIPT, (buf, context) -> {
+            String targetNumber = buf.readUtf(PhoneData.PHONE_NUMBER_LENGTH);
+            String targetName = buf.readUtf(PhoneData.MAX_CONTACT_NAME_LENGTH);
+            long amount = buf.readVarLong();
+            long balance = buf.readVarLong();
+            context.queue(() -> {
+                Minecraft minecraft = Minecraft.getInstance();
+                if (minecraft != null && minecraft.screen instanceof PhoneScreen phoneScreen) {
+                    phoneScreen.handleBankTransferReceipt(targetNumber, targetName, amount, balance);
+                }
+            });
+        });
+
         ClientPlayerEvent.CLIENT_PLAYER_QUIT.register(player -> {
             clearClientState();
         });
     }
 
     public static void tick(Minecraft minecraft) {
+        syncCameraPoseState(minecraft);
+        syncScreenOnState(minecraft);
+
         if (minecraft == null || minecraft.level == null) {
             stopAllActiveRings();
             stopAllHomeDialingRings();
@@ -160,11 +217,18 @@ public final class PhoneNetworkingClient {
 
     public static void clearClientState() {
         PhoneClientCallState.clear();
+        PhoneClientChatState.clear();
         stopAllActiveRings();
         stopAllHomeDialingRings();
         stopMobileIncomingRing();
         stopMobileDialingRing();
         HomePhoneRingState.clear();
+        cameraPoseInitialized = false;
+        lastCameraPoseActive = false;
+        lastCameraPoseSelfie = false;
+        screenOnInitialized = false;
+        lastScreenOnActive = false;
+        PhoneClientHooks.clearBankReceiveWorldState(false);
     }
 
     public static void requestSync() {
@@ -240,6 +304,95 @@ public final class PhoneNetworkingClient {
         buf.writeUtf(PhoneData.normalizePhoneNumber(number), PhoneData.PHONE_NUMBER_LENGTH);
         buf.writeUtf(message == null ? "" : message, com.sammy.minedevice.phone.PhoneChatData.MAX_MESSAGE_LENGTH);
         NetworkManager.sendToServer(PhoneNetworking.CHAT_MESSAGE_SEND, buf);
+    }
+
+    public static void requestAppendPhotoMetadata(InteractionHand preferredHand, String photoFileName, ItemStack captureStack) {
+        FriendlyByteBuf buf = new FriendlyByteBuf(Unpooled.buffer());
+        buf.writeEnum(preferredHand == null ? InteractionHand.MAIN_HAND : preferredHand);
+        buf.writeUtf(photoFileName == null ? "" : photoFileName, com.sammy.minedevice.phone.PhonePhotoData.MAX_PHOTO_FILE_NAME_LENGTH);
+        buf.writeItem(captureStack == null ? ItemStack.EMPTY : captureStack);
+        NetworkManager.sendToServer(PhoneNetworking.PHOTO_APPEND, buf);
+    }
+
+    public static void requestDeletePhotoMetadata(InteractionHand preferredHand, String photoFileName) {
+        FriendlyByteBuf buf = new FriendlyByteBuf(Unpooled.buffer());
+        buf.writeEnum(preferredHand == null ? InteractionHand.MAIN_HAND : preferredHand);
+        buf.writeUtf(photoFileName == null ? "" : photoFileName, com.sammy.minedevice.phone.PhonePhotoData.MAX_PHOTO_FILE_NAME_LENGTH);
+        NetworkManager.sendToServer(PhoneNetworking.PHOTO_DELETE, buf);
+    }
+
+    public static void requestBankSync() {
+        NetworkManager.sendToServer(PhoneNetworking.BANK_SYNC_REQUEST, new FriendlyByteBuf(Unpooled.buffer()));
+    }
+
+    public static void requestBankTransfer(String number, long amount) {
+        FriendlyByteBuf buf = new FriendlyByteBuf(Unpooled.buffer());
+        buf.writeUtf(PhoneData.normalizePhoneNumber(number), PhoneData.PHONE_NUMBER_LENGTH);
+        buf.writeVarLong(Math.max(0L, amount));
+        NetworkManager.sendToServer(PhoneNetworking.BANK_TRANSFER, buf);
+    }
+
+    public static void requestBankReceiveState(boolean active) {
+        FriendlyByteBuf buf = new FriendlyByteBuf(Unpooled.buffer());
+        buf.writeBoolean(active);
+        NetworkManager.sendToServer(PhoneNetworking.BANK_RECEIVE_STATE, buf);
+    }
+
+    public static void requestBankScanTarget(UUID targetId) {
+        if (targetId == null) {
+            return;
+        }
+
+        FriendlyByteBuf buf = new FriendlyByteBuf(Unpooled.buffer());
+        buf.writeUUID(targetId);
+        NetworkManager.sendToServer(PhoneNetworking.BANK_SCAN_TARGET, buf);
+    }
+
+    private static void syncCameraPoseState(Minecraft minecraft) {
+        if (minecraft == null || minecraft.getConnection() == null) {
+            cameraPoseInitialized = false;
+            lastCameraPoseActive = false;
+            lastCameraPoseSelfie = false;
+            return;
+        }
+
+        boolean active = minecraft.player != null
+                && PhoneClientHooks.isLocalPhoneCameraPoseActive();
+        boolean selfie = active && PhoneClientHooks.isLocalPhoneCameraSelfieActive();
+
+        if (cameraPoseInitialized && active == lastCameraPoseActive && selfie == lastCameraPoseSelfie) {
+            return;
+        }
+
+        cameraPoseInitialized = true;
+        lastCameraPoseActive = active;
+        lastCameraPoseSelfie = selfie;
+
+        FriendlyByteBuf buf = new FriendlyByteBuf(Unpooled.buffer());
+        buf.writeBoolean(active);
+        buf.writeBoolean(selfie);
+        NetworkManager.sendToServer(PhoneNetworking.CAMERA_POSE_UPDATE, buf);
+    }
+
+    private static void syncScreenOnState(Minecraft minecraft) {
+        if (minecraft == null || minecraft.getConnection() == null) {
+            screenOnInitialized = false;
+            lastScreenOnActive = false;
+            return;
+        }
+
+        boolean active = minecraft.player != null && PhoneClientHooks.isLocalPhoneScreenOnActive();
+
+        if (screenOnInitialized && active == lastScreenOnActive) {
+            return;
+        }
+
+        screenOnInitialized = true;
+        lastScreenOnActive = active;
+
+        FriendlyByteBuf buf = new FriendlyByteBuf(Unpooled.buffer());
+        buf.writeBoolean(active);
+        NetworkManager.sendToServer(PhoneNetworking.SCREEN_ON_UPDATE, buf);
     }
 
     private static void sendWithoutPayload(net.minecraft.resources.ResourceLocation packetId, BlockPos homePhonePos) {

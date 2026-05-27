@@ -185,15 +185,14 @@ final class PhoneCallSurfaceRenderer {
         }
 
         UiRect contentBounds = screen.getCallSurfaceBounds();
-        UiRect numberBounds = screen.getCallNumberDisplayBounds();
         int numberInsetX = Math.max(7, Math.round(9 * screen.scale));
-        int numberInsetY = Math.max(1, Math.round(1 * screen.scale));
+        
+        int statusY = contentBounds.top + Math.max(20, Math.round(28 * screen.scale));
         UiRect sessionNumberBounds = new UiRect(
-                numberBounds.left + numberInsetX,
-                numberBounds.top + numberInsetY,
-                Math.max(24, numberBounds.width - (numberInsetX * 2)),
-                Math.max(16, numberBounds.height - (numberInsetY * 2)));
-        int statusY = contentBounds.top + Math.round(18 * screen.scale);
+                contentBounds.left + numberInsetX,
+                statusY + Math.max(12, Math.round(16 * screen.scale)),
+                Math.max(24, contentBounds.width - (numberInsetX * 2)),
+                Math.max(20, Math.round(28 * screen.scale)));
         int subY = sessionNumberBounds.bottom() + Math.max(8, Math.round(10 * screen.scale));
 
         Component statusText = Component.translatable(screen.activeCallConnected
@@ -248,35 +247,20 @@ final class PhoneCallSurfaceRenderer {
 
         UiRect connectButtonBounds = screen.getCallConnectButtonBounds();
         UiRect hangupButtonBounds = screen.getCallHangupButtonBounds();
-        int connectFill = screen.activeCallIncoming ? 0xFF34C759
-                : screen.activeCallMissed ? 0xFFFF3B30
-                : 0xFFD1D1D6;
-        Component connectText = Component.translatable(screen.activeCallConnected
-                ? "screen.minedevice.phone.call.action.live"
-                : screen.activeCallMissed
-                ? "screen.minedevice.phone.call.action.dismiss"
-                : screen.activeCallIncoming
-                ? "screen.minedevice.phone.call.action.connect"
-                : "screen.minedevice.phone.call.status.waiting");
-        Component hangupText = Component.translatable("screen.minedevice.phone.call.action.hangup");
 
-        if (!screen.activeCallConnected) {
-            guiGraphics.fill(connectButtonBounds.left, connectButtonBounds.top,
-                    connectButtonBounds.right(), connectButtonBounds.bottom(), connectFill);
+        // Render answer button (only when incoming call, not yet connected)
+        if (screen.activeCallIncoming && !screen.activeCallConnected) {
+            guiGraphics.blit(PhoneScreen.ANSWER_BUTTON_TEXTURE, 
+                    connectButtonBounds.left, connectButtonBounds.top,
+                    connectButtonBounds.width, connectButtonBounds.height, 
+                    0.0F, 0.0F, 24, 24, 24, 24);
         }
-        guiGraphics.fill(hangupButtonBounds.left, hangupButtonBounds.top,
-                hangupButtonBounds.right(), hangupButtonBounds.bottom(), 0xFFFF3B30);
-        int buttonLabelY = connectButtonBounds.top + Math.max(5, Math.round(7 * screen.scale));
-        int connectLabelMaxWidth = Math.max(14, connectButtonBounds.width - Math.max(4, Math.round(6 * screen.scale)));
-        int hangupLabelMaxWidth = Math.max(14, hangupButtonBounds.width - Math.max(4, Math.round(6 * screen.scale)));
-        if (!screen.activeCallConnected) {
-            drawCenteredFittedText(guiGraphics, minecraft.font, connectText,
-                    connectButtonBounds.left + (connectButtonBounds.width / 2), buttonLabelY,
-                    connectLabelMaxWidth, 0xFF000000, false, 0.35F, 0.78F);
-        }
-        drawCenteredFittedText(guiGraphics, minecraft.font, hangupText,
-                hangupButtonBounds.left + (hangupButtonBounds.width / 2), buttonLabelY,
-                hangupLabelMaxWidth, 0xFF000000, false, 0.35F, 0.78F);
+        
+        // Render hangup button
+        guiGraphics.blit(PhoneScreen.HANGUP_BUTTON_TEXTURE, 
+                hangupButtonBounds.left, hangupButtonBounds.top,
+                hangupButtonBounds.width, hangupButtonBounds.height, 
+                0.0F, 0.0F, 24, 24, 24, 24);
     }
 
     static void renderCallBackdrop(PhoneScreen screen, GuiGraphics guiGraphics) {

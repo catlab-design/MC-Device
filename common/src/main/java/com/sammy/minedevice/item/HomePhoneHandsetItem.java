@@ -97,6 +97,22 @@ public final class HomePhoneHandsetItem extends Item {
                 && (isBoundTo(player.getMainHandItem(), address) || isBoundTo(player.getOffhandItem(), address));
     }
 
+    public static InteractionHand getHeldBoundHand(ServerPlayer player, HomePhoneAddress address) {
+        if (player == null || address == null) {
+            return null;
+        }
+
+        if (isBoundTo(player.getMainHandItem(), address)) {
+            return InteractionHand.MAIN_HAND;
+        }
+
+        if (isBoundTo(player.getOffhandItem(), address)) {
+            return InteractionHand.OFF_HAND;
+        }
+
+        return null;
+    }
+
     public static boolean removeBoundHandsets(ServerPlayer player, HomePhoneAddress address) {
         if (player == null || address == null) {
             return false;

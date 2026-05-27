@@ -26,5 +26,50 @@
         "name": "minedevice:block/phone/dialing"
       }
     ]
+  },
+  "airstrike_target_locked_en_us": {
+    "category": "player",
+    "sounds": [
+      {
+        "name": "minedevice:item/airstrike/target_locked_en_us",
+        "stream": true
+      }
+    ]
+  },
+  "airstrike_target_locked_th_th": {
+    "category": "player",
+    "sounds": [
+      {
+        "name": "minedevice:item/airstrike/target_locked_th_th",
+        "stream": true
+      }
+    ]
+  },
+  "walkie_on_you": {
+    "category": "player",
+    "subtitle": "subtitles.minedevice.walkie_on_you",
+    "sounds": [
+      {
+        "name": "minedevice:item/walkie/radio_onyou"
+      }
+    ]
+  },
+  "walkie_close": {
+    "category": "player",
+    "subtitle": "subtitles.minedevice.walkie_close",
+    "sounds": [
+      {
+        "name": "minedevice:item/walkie/radio_close"
+      }
+    ]
+  },
+  "walkie_talk": {
+    "category": "player",
+    "subtitle": "subtitles.minedevice.walkie_talk",
+    "sounds": [
+      {
+        "name": "minedevice:item/walkie/radio_talk"
+      }
+    ]
   }
 }

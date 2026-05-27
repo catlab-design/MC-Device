@@ -296,12 +296,11 @@ final class PhoneScreenLayout {
     }
 
     UiRect callConnectButtonBounds() {
-        int buttonWidth = Math.max(34, Math.round(40 * scale));
-        int buttonHeight = Math.max(14, Math.round(18 * scale));
-        int buttonY = displayY + displayHeight - buttonHeight - Math.round(66 * scale);
+        int buttonSize = Math.max(30, Math.round(36 * scale));
+        int buttonY = displayY + displayHeight - buttonSize - Math.round(66 * scale);
         int gap = Math.max(5, Math.round(6 * scale));
         int centerX = displayX + (displayWidth / 2);
-        return new UiRect(centerX - buttonWidth - (gap / 2), buttonY, buttonWidth, buttonHeight);
+        return new UiRect(centerX - buttonSize - (gap / 2), buttonY, buttonSize, buttonSize);
     }
 
     UiRect callHangupButtonBounds() {

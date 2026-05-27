@@ -1,0 +1,8 @@
+{
+  "parent": "minedevice:item/phone_3d",
+  "textures": {
+    "2": "minedevice:item/phone_on",
+    "3": "minedevice:item/phone_on_tint",
+    "particle": "minedevice:item/phone_on"
+  }
+}

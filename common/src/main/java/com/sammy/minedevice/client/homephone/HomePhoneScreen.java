@@ -21,6 +21,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 
 import java.util.Objects;
+import java.util.UUID;
 
 public final class HomePhoneScreen extends Screen {
     private static final float UI_SCALE = 0.935F;
@@ -36,6 +37,7 @@ public final class HomePhoneScreen extends Screen {
     private String dialedNumber = "";
     private String activeCallNumber = "";
     private String activeCallName = "";
+    private UUID activeCallProfileId;
     private boolean activeCallIncoming;
     private boolean activeCallConnected;
     private boolean activeCallMissed;
@@ -45,7 +47,6 @@ public final class HomePhoneScreen extends Screen {
     private long observedCallStateRevision = Long.MIN_VALUE;
     private int syncCooldown;
 
-    // Layout values
     private int panelX;
     private int panelY;
     private int panelW = ui(352);
@@ -89,18 +90,14 @@ public final class HomePhoneScreen extends Screen {
 
     @Override
     public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
-        // Overlay
         guiGraphics.fill(0, 0, width, height, 0xAA000000);
 
-        // Main Panel (Thick white frame, thin dark border)
         guiGraphics.fill(panelX, panelY, panelX + panelW, panelY + panelH, 0xFF191C21);
         guiGraphics.fill(panelX + 1, panelY + 1, panelX + panelW - 1, panelY + panelH - 1, 0xFFFFFFFF);
         guiGraphics.fill(panelX + 8, panelY + 8, panelX + panelW - 8, panelY + panelH - 8, BG_COLOR);
 
-        // Title
         drawUiText(guiGraphics, Component.literal("Home Phone"), panelX + ui(18), panelY + ui(18), TEXT_TITLE);
 
-        // Top Row: Art Box (Left) and Status Box (Right)
         int artBoxX = panelX + ui(18);
         int artBoxY = panelY + ui(36);
         int artBoxH = ui(60);
@@ -115,7 +112,6 @@ public final class HomePhoneScreen extends Screen {
         drawBox(guiGraphics, statusBoxX, statusBoxY, statusBoxW, statusBoxH);
         renderCallStatus(guiGraphics, statusBoxX, statusBoxY, statusBoxW, statusBoxH);
 
-        // Middle Row: Input Box
         int inputBoxX = statusBoxX;
         int inputBoxY = statusBoxY + statusBoxH + ui(6);
         int inputBoxW = statusBoxW;
@@ -155,7 +151,6 @@ public final class HomePhoneScreen extends Screen {
         drawUiText(guiGraphics, titleLine, x + ui(6), y + ui(4), activeCallMissed ? 0xFFDD0000 : TEXT_STATUS);
         drawUiText(guiGraphics, detailLine, x + ui(6), y + ui(14), TEXT_HINT);
 
-        // Own number box (top right of status box)
         String ownNumber = getOwnPhoneNumber();
         Component ownNumberText = Component.literal(ownNumber);
         int chipW = uiTextWidth(ownNumberText) + ui(8);
@@ -195,6 +190,10 @@ public final class HomePhoneScreen extends Screen {
             int faceX = x + (w - faceSize) / 2;
             int faceY = y + (h - faceSize) / 2;
             ResourceLocation callerSkin = resolveCallerSkinTexture();
+            if (callerSkin == null) {
+                PlayerFaceRenderer.draw(guiGraphics, QUESTION_MARK_TEXTURE, faceX, faceY, faceSize);
+                return;
+            }
             PlayerFaceRenderer.draw(guiGraphics, callerSkin, faceX, faceY, faceSize);
             return;
         }
@@ -212,6 +211,15 @@ public final class HomePhoneScreen extends Screen {
     private ResourceLocation resolveCallerSkinTexture() {
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft != null && minecraft.getConnection() != null) {
+            if (activeCallProfileId != null) {
+                PlayerInfo info = minecraft.getConnection().getPlayerInfo(activeCallProfileId);
+                if (info != null) {
+                    return info.getSkinLocation();
+                }
+
+                return DefaultPlayerSkin.getDefaultSkin(activeCallProfileId);
+            }
+
             String callerName = activeCallName == null ? "" : activeCallName.strip();
             if (!callerName.isBlank()) {
                 PlayerInfo info = minecraft.getConnection().getPlayerInfo(callerName);
@@ -221,11 +229,7 @@ public final class HomePhoneScreen extends Screen {
             }
         }
 
-        if (minecraft != null && minecraft.player != null) {
-            return DefaultPlayerSkin.getDefaultSkin(minecraft.player.getUUID());
-        }
-
-        return DefaultPlayerSkin.getDefaultSkin();
+        return null;
     }
 
     @Override
@@ -382,6 +386,7 @@ public final class HomePhoneScreen extends Screen {
             return;
         activeCallNumber = norm;
         activeCallName = "";
+        activeCallProfileId = null;
         activeCallIncoming = false;
         activeCallConnected = false;
         activeCallMissed = false;
@@ -410,6 +415,7 @@ public final class HomePhoneScreen extends Screen {
             dialedNumber = activeCallNumber;
         activeCallNumber = "";
         activeCallName = "";
+        activeCallProfileId = null;
         activeCallIncoming = false;
         activeCallConnected = false;
         activeCallMissed = false;
@@ -431,11 +437,13 @@ public final class HomePhoneScreen extends Screen {
         PhoneCallState state = PhoneClientCallState.getState(homePhonePos);
         String otherN = PhoneClientCallState.getOtherNumber(homePhonePos);
         String otherM = PhoneClientCallState.getOtherName(homePhonePos);
+        UUID otherProfileId = PhoneClientCallState.getOtherProfileId(homePhonePos);
 
         if (state == PhoneCallState.IDLE) {
             if (!activeCallNumber.isEmpty()) dialedNumber = activeCallNumber;
             activeCallNumber = "";
             activeCallName = "";
+            activeCallProfileId = null;
             activeCallIncoming = false;
             activeCallConnected = false;
             activeCallMissed = false;
@@ -449,6 +457,7 @@ public final class HomePhoneScreen extends Screen {
             speakerEnabled = resolveSpeakerDisplayState();
             activeCallNumber = otherN;
             activeCallName = otherM;
+            activeCallProfileId = otherProfileId;
             activeCallTicks = activeCallConnected
                     ? PhoneClientCallState.getConnectedDurationTicks(homePhonePos)
                     : 0;

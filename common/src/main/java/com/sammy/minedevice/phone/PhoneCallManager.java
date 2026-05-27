@@ -81,7 +81,8 @@ public final class PhoneCallManager {
                 blockPos,
                 stateFor(endpoint, session),
                 otherNumberFor(endpoint, session),
-                otherNameFor(endpoint, session)
+                otherNameFor(endpoint, session),
+                otherProfileIdFor(endpoint, session)
         );
     }
 
@@ -302,6 +303,26 @@ public final class PhoneCallManager {
         return bridges;
     }
 
+    public static List<PlayerCallBridge> snapshotPlayerCallBridges(MinecraftServer server) {
+        List<PlayerCallBridge> bridges = new ArrayList<>();
+        if (server == null) {
+            return bridges;
+        }
+
+        Set<CallSession> sessions = new HashSet<>(ACTIVE_PLAYER_CALLS.values());
+        sessions.addAll(ACTIVE_HOME_PHONE_CALLS.values());
+        for (CallSession session : sessions) {
+            if (session.server != server || session.state != PhoneCallState.CONNECTED) {
+                continue;
+            }
+
+            addPlayerBridge(session, session.caller, session.callee, bridges);
+            addPlayerBridge(session, session.callee, session.caller, bridges);
+        }
+
+        return bridges;
+    }
+
     public static ServerPlayer findOnlineByNumber(MinecraftServer server, String rawNumber) {
         String number = PhoneData.normalizePhoneNumber(rawNumber);
         if (!PhoneData.isValidPhoneNumber(number) || !PhoneData.isMobilePhoneNumber(number)) {
@@ -383,6 +404,7 @@ public final class PhoneCallManager {
                 server.getTickCount()
         );
         indexSession(session);
+        updatePlayerCallPoseFlags(session);
         clearHomePhoneSpeaker(session);
         applyHomePhoneRinging(session);
         syncSession(session);
@@ -396,6 +418,8 @@ public final class PhoneCallManager {
         }
 
         session.state = PhoneCallState.CONNECTED;
+        ensureHomePhoneAudioEndpoint(session);
+        updatePlayerCallPoseFlags(session);
         applyHomePhoneRinging(session);
         syncSession(session);
         syncEndpointForViewer(endpoint, viewer, session);
@@ -409,6 +433,7 @@ public final class PhoneCallManager {
         }
 
         clearHomePhoneRinging(session);
+        clearPlayerCallPoseFlags(session);
         clearHomePhoneSpeaker(session);
         clearHomePhoneHandsets(session);
         clearSpeakerEmptyCounters(session);
@@ -481,7 +506,8 @@ public final class PhoneCallManager {
                         homePhoneEndpoint.address().blockPos(),
                         stateFor(homePhoneEndpoint, session),
                         otherNumberFor(homePhoneEndpoint, session),
-                        otherNameFor(homePhoneEndpoint, session)
+                        otherNameFor(homePhoneEndpoint, session),
+                        otherProfileIdFor(homePhoneEndpoint, session)
                 );
             }
         }
@@ -524,8 +550,39 @@ public final class PhoneCallManager {
                 player,
                 stateFor(endpoint, session),
                 otherNumberFor(endpoint, session),
-                otherNameFor(endpoint, session)
+                otherNameFor(endpoint, session),
+                otherProfileIdFor(endpoint, session)
         );
+    }
+
+    private static void updatePlayerCallPoseFlags(CallSession session) {
+        if (session == null || session.server == null) {
+            return;
+        }
+
+        setPlayerCallPose(session.server, session.caller, session.state == PhoneCallState.OUTGOING_RINGING
+                || session.state == PhoneCallState.CONNECTED);
+        setPlayerCallPose(session.server, session.callee, session.state == PhoneCallState.CONNECTED);
+    }
+
+    private static void clearPlayerCallPoseFlags(CallSession session) {
+        if (session == null || session.server == null) {
+            return;
+        }
+
+        setPlayerCallPose(session.server, session.caller, false);
+        setPlayerCallPose(session.server, session.callee, false);
+    }
+
+    private static void setPlayerCallPose(MinecraftServer server, Endpoint endpoint, boolean active) {
+        if (!(endpoint instanceof PlayerEndpoint playerEndpoint) || server == null) {
+            return;
+        }
+
+        ServerPlayer player = getPlayer(server, playerEndpoint.playerId());
+        if (player != null) {
+            PhoneCallPoseAccess.setPhoneCallPoseActive(player, active);
+        }
     }
 
     private static PhoneCallState stateFor(Endpoint endpoint, CallSession session) {
@@ -547,6 +604,11 @@ public final class PhoneCallManager {
 
     private static String otherNameFor(Endpoint endpoint, CallSession session) {
         return endpoint.equals(session.caller) ? session.calleeName : session.callerName;
+    }
+
+    private static UUID otherProfileIdFor(Endpoint endpoint, CallSession session) {
+        Endpoint otherEndpoint = endpoint.equals(session.caller) ? session.callee : session.caller;
+        return otherEndpoint instanceof PlayerEndpoint playerEndpoint ? playerEndpoint.playerId() : null;
     }
 
     private static String labelFor(Endpoint endpoint, MinecraftServer server, String fallbackNumber) {
@@ -631,6 +693,31 @@ public final class PhoneCallManager {
         setHomePhoneSpeaker(session.caller, session.server, false);
         setHomePhoneSpeaker(session.callee, session.server, false);
         clearSpeakerEmptyCounters(session);
+    }
+
+    private static void ensureHomePhoneAudioEndpoint(CallSession session) {
+        if (session == null) {
+            return;
+        }
+
+        ensureHomePhoneAudioEndpoint(session.caller, session.server);
+        ensureHomePhoneAudioEndpoint(session.callee, session.server);
+    }
+
+    private static void ensureHomePhoneAudioEndpoint(Endpoint endpoint, MinecraftServer server) {
+        if (!(endpoint instanceof HomePhoneEndpoint homePhoneEndpoint) || server == null) {
+            return;
+        }
+
+        HomePhoneBlockEntity homePhone = getHomePhone(server, homePhoneEndpoint.address());
+        if (homePhone == null || homePhone.isSpeakerEnabled()) {
+            return;
+        }
+
+        if (resolveActiveHandsetHolder(server, homePhoneEndpoint.address(), homePhone) == null) {
+            homePhone.setSpeakerEnabled(true);
+            clearSpeakerEmptyCounter(homePhoneEndpoint.address());
+        }
     }
 
     private static void clearHomePhoneHandsets(CallSession session) {
@@ -784,6 +871,20 @@ public final class PhoneCallManager {
         ));
     }
 
+    private static void addPlayerBridge(CallSession session, Endpoint localEndpoint, Endpoint remoteEndpoint,
+                                        List<PlayerCallBridge> bridges) {
+        if (!(localEndpoint instanceof PlayerEndpoint localPlayerEndpoint)
+                || !(remoteEndpoint instanceof PlayerEndpoint remotePlayerEndpoint)) {
+            return;
+        }
+
+        bridges.add(new PlayerCallBridge(
+                localPlayerEndpoint.playerId(),
+                remotePlayerEndpoint.playerId(),
+                blankToNumber(otherNameFor(localEndpoint, session), otherNumberFor(localEndpoint, session))
+        ));
+    }
+
     private static HomePhoneBlockEntity getHomePhone(MinecraftServer server, HomePhoneAddress address) {
         if (server == null || address == null) {
             return null;
@@ -854,6 +955,7 @@ public final class PhoneCallManager {
             session.state = PhoneCallState.MISSED;
             session.startTime = currentTick;
             clearHomePhoneRinging(session);
+            clearPlayerCallPoseFlags(session);
             clearHomePhoneSpeaker(session);
             clearHomePhoneHandsets(session);
             clearSpeakerEmptyCounters(session);
@@ -863,6 +965,7 @@ public final class PhoneCallManager {
 
         for (CallSession session : sessionsToRemove) {
             clearHomePhoneRinging(session);
+            clearPlayerCallPoseFlags(session);
             clearHomePhoneSpeaker(session);
             clearHomePhoneHandsets(session);
             clearSpeakerEmptyCounters(session);
@@ -970,7 +1073,12 @@ public final class PhoneCallManager {
                 continue;
             }
 
-            HomePhoneHandsetItem.enforceMainHandLock(holder, address, homePhone.getPhoneNumber());
+            InteractionHand heldHand = HomePhoneHandsetItem.getHeldBoundHand(holder, address);
+            HomePhoneHandsetItem.ensurePlayerHasHandset(
+                    holder,
+                    heldHand == null ? InteractionHand.MAIN_HAND : heldHand,
+                    address,
+                    homePhone.getPhoneNumber());
         }
     }
 
@@ -1080,5 +1188,8 @@ public final class PhoneCallManager {
 
     public record HomePhoneSpeakerBridge(HomePhoneAddress address, boolean speakerEnabled, UUID handsetHolderId,
                                          UUID remotePlayerId, List<HomePhoneAddress> remoteBridgeAddresses) {
+    }
+
+    public record PlayerCallBridge(UUID listenerPlayerId, UUID remotePlayerId, String remoteDisplayName) {
     }
 }

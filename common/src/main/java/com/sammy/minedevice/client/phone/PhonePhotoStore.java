@@ -2,6 +2,7 @@ package com.sammy.minedevice.client.phone;
 
 import com.mojang.blaze3d.platform.NativeImage;
 import com.sammy.minedevice.Minedevice;
+import com.sammy.minedevice.phone.PhonePhotoData;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -25,15 +26,8 @@ import java.util.Map;
 import java.util.Objects;
 
 final class PhonePhotoStore {
-    private static final int MAX_PHOTOS = 302;
     private static final int PHOTO_PREVIEW_SIZE = 200;
     private static final String PHOTO_DIRECTORY_NAME = "minedevice_phone";
-    private static final String PHOTOS_TAG = "photos";
-    private static final String PHOTO_FILE_TAG = "file";
-    private static final String PHOTO_ITEM_TAG = "item";
-    private static final String PHOTO_COUNT_TAG = "count";
-    private static final String PHOTO_NAME_TAG = "name";
-    private static final String PHOTO_TIME_TAG = "time";
 
     private final String modId;
     private final Map<String, PhotoTexture> previewPhotoTextures = new HashMap<>();
@@ -44,24 +38,15 @@ final class PhonePhotoStore {
     }
 
     int maxPhotos() {
-        return MAX_PHOTOS;
+        return PhonePhotoData.MAX_PHOTOS;
     }
 
     int getPhotoCount(ItemStack phoneStack) {
-        if (phoneStack.isEmpty() || !phoneStack.hasTag()) {
-            return 0;
-        }
-
-        CompoundTag phoneTag = phoneStack.getTag();
-        if (phoneTag == null || !phoneTag.contains(PHOTOS_TAG, Tag.TAG_LIST)) {
-            return 0;
-        }
-
-        return phoneTag.getList(PHOTOS_TAG, Tag.TAG_COMPOUND).size();
+        return PhonePhotoData.getPhotoCount(phoneStack);
     }
 
     boolean isPhotoLimitReached(ItemStack phoneStack) {
-        return getPhotoCount(phoneStack) >= MAX_PHOTOS;
+        return PhonePhotoData.isPhotoLimitReached(phoneStack);
     }
 
     String writePhoto(NativeImage image) {
@@ -76,76 +61,22 @@ final class PhonePhotoStore {
             Path photoPath = photoDirectory.resolve(fileName);
             image.writeToFile(photoPath.toFile());
             return fileName;
-        } catch (IOException exception) {
+        } catch (Exception exception) {
             Minedevice.LOGGER.debug("Failed to write phone photo", exception);
             return null;
         }
     }
 
     boolean appendPhotoToStack(ItemStack phoneStack, String photoFileName, ItemStack captureStack) {
-        if (phoneStack.isEmpty()) {
-            return false;
-        }
-
-        CompoundTag phoneTag = phoneStack.getOrCreateTag();
-        ListTag photos = phoneTag.contains(PHOTOS_TAG, Tag.TAG_LIST)
-                ? phoneTag.getList(PHOTOS_TAG, Tag.TAG_COMPOUND)
-                : new ListTag();
-
-        if (photos.size() >= MAX_PHOTOS) {
-            return false;
-        }
-
-        CompoundTag photoTag = new CompoundTag();
-        photoTag.putString(PHOTO_FILE_TAG, photoFileName);
-        photoTag.putLong(PHOTO_TIME_TAG, System.currentTimeMillis());
-
-        if (!captureStack.isEmpty()) {
-            ResourceLocation itemId = BuiltInRegistries.ITEM.getKey(captureStack.getItem());
-            photoTag.putString(PHOTO_ITEM_TAG, itemId.toString());
-            photoTag.putInt(PHOTO_COUNT_TAG, Math.max(1, captureStack.getCount()));
-
-            if (captureStack.hasCustomHoverName()) {
-                photoTag.putString(PHOTO_NAME_TAG, captureStack.getHoverName().getString());
-            }
-        }
-
-        photos.add(photoTag);
-        phoneTag.put(PHOTOS_TAG, photos);
-        return true;
+        return PhonePhotoData.appendPhoto(phoneStack, photoFileName, captureStack);
     }
 
     boolean removePhotoFromStack(ItemStack phoneStack, int viewerIndex, String expectedFileName) {
-        if (phoneStack.isEmpty() || !phoneStack.hasTag()) {
+        String fileNameToDelete = PhonePhotoData.removePhotoAt(phoneStack, viewerIndex, expectedFileName);
+        if (fileNameToDelete == null) {
             return false;
         }
 
-        CompoundTag phoneTag = phoneStack.getTag();
-        if (phoneTag == null || !phoneTag.contains(PHOTOS_TAG, Tag.TAG_LIST)) {
-            return false;
-        }
-
-        ListTag photosTag = phoneTag.getList(PHOTOS_TAG, Tag.TAG_COMPOUND);
-        if (photosTag.isEmpty()) {
-            return false;
-        }
-
-        int nbtIndex = photosTag.size() - 1 - viewerIndex;
-        if (nbtIndex < 0 || nbtIndex >= photosTag.size()) {
-            return false;
-        }
-
-        CompoundTag removedPhoto = photosTag.getCompound(nbtIndex);
-        String removedFileName = removedPhoto.getString(PHOTO_FILE_TAG);
-        photosTag.remove(nbtIndex);
-
-        if (photosTag.isEmpty()) {
-            phoneTag.remove(PHOTOS_TAG);
-        } else {
-            phoneTag.put(PHOTOS_TAG, photosTag);
-        }
-
-        String fileNameToDelete = removedFileName.isEmpty() ? expectedFileName : removedFileName;
         unloadTexture(fileNameToDelete);
         deletePhotoFile(fileNameToDelete);
         return true;
@@ -157,11 +88,11 @@ final class PhonePhotoStore {
         }
 
         CompoundTag phoneTag = phoneStack.getTag();
-        if (phoneTag == null || !phoneTag.contains(PHOTOS_TAG, Tag.TAG_LIST)) {
+        if (phoneTag == null || !phoneTag.contains(PhonePhotoData.PHOTOS_TAG, Tag.TAG_LIST)) {
             return List.of();
         }
 
-        ListTag photosTag = phoneTag.getList(PHOTOS_TAG, Tag.TAG_COMPOUND);
+        ListTag photosTag = phoneTag.getList(PhonePhotoData.PHOTOS_TAG, Tag.TAG_COMPOUND);
         if (photosTag.isEmpty()) {
             return List.of();
         }
@@ -169,8 +100,8 @@ final class PhonePhotoStore {
         List<PhotoEntry> photos = new ArrayList<>(photosTag.size());
         for (int index = photosTag.size() - 1; index >= 0; index--) {
             CompoundTag photoTag = photosTag.getCompound(index);
-            String fileName = photoTag.contains(PHOTO_FILE_TAG, Tag.TAG_STRING)
-                    ? photoTag.getString(PHOTO_FILE_TAG)
+            String fileName = photoTag.contains(PhonePhotoData.PHOTO_FILE_TAG, Tag.TAG_STRING)
+                    ? photoTag.getString(PhonePhotoData.PHOTO_FILE_TAG)
                     : "";
             photos.add(new PhotoEntry(fileName, readPhotoItemStack(photoTag)));
         }
@@ -201,9 +132,17 @@ final class PhonePhotoStore {
             int textureHeight;
 
             if (previewMode) {
-                NativeImage previewImage = resizeToSquare(sourceImage, PHOTO_PREVIEW_SIZE);
-                sourceImage.close();
-                texture = new DynamicTexture(previewImage);
+                NativeImage previewImage = null;
+                try {
+                    previewImage = resizeToSquare(sourceImage, PHOTO_PREVIEW_SIZE);
+                    texture = new DynamicTexture(previewImage);
+                    previewImage = null;
+                } finally {
+                    sourceImage.close();
+                    if (previewImage != null) {
+                        previewImage.close();
+                    }
+                }
                 textureWidth = PHOTO_PREVIEW_SIZE;
                 textureHeight = PHOTO_PREVIEW_SIZE;
             } else {
@@ -222,7 +161,7 @@ final class PhonePhotoStore {
             PhotoTexture photoTexture = new PhotoTexture(textureId, textureWidth, textureHeight);
             textureCache.put(fileName, photoTexture);
             return photoTexture;
-        } catch (IOException exception) {
+        } catch (Exception exception) {
             Minedevice.LOGGER.debug("Failed to load phone photo texture: {}", fileName, exception);
             return null;
         }
@@ -250,12 +189,11 @@ final class PhonePhotoStore {
         try {
             Files.deleteIfExists(getPhotoDirectory().resolve(fileName));
         } catch (IOException ignored) {
-            // If cleanup fails we just leave the file in screenshots folder.
         }
     }
 
     private ItemStack readPhotoItemStack(CompoundTag photoTag) {
-        String itemIdRaw = photoTag.getString(PHOTO_ITEM_TAG);
+        String itemIdRaw = photoTag.getString(PhonePhotoData.PHOTO_ITEM_TAG);
         if (itemIdRaw.isEmpty()) {
             return ItemStack.EMPTY;
         }
@@ -270,10 +208,10 @@ final class PhonePhotoStore {
             return ItemStack.EMPTY;
         }
 
-        int count = Math.max(1, photoTag.getInt(PHOTO_COUNT_TAG));
+        int count = Math.max(1, photoTag.getInt(PhonePhotoData.PHOTO_COUNT_TAG));
         ItemStack stack = new ItemStack(item, Math.min(count, item.getMaxStackSize()));
-        if (photoTag.contains(PHOTO_NAME_TAG, Tag.TAG_STRING)) {
-            stack.setHoverName(Component.literal(photoTag.getString(PHOTO_NAME_TAG)));
+        if (photoTag.contains(PhonePhotoData.PHOTO_NAME_TAG, Tag.TAG_STRING)) {
+            stack.setHoverName(Component.literal(photoTag.getString(PhonePhotoData.PHOTO_NAME_TAG)));
         }
         return stack;
     }
@@ -283,6 +221,10 @@ final class PhonePhotoStore {
         int sourceWidth = sourceImage.getWidth();
         int sourceHeight = sourceImage.getHeight();
         int cropSize = Math.min(sourceWidth, sourceHeight);
+        if (cropSize <= 0) {
+            return resized;
+        }
+
         int cropX = (sourceWidth - cropSize) / 2;
         int cropY = (sourceHeight - cropSize) / 2;
 
@@ -298,6 +240,11 @@ final class PhonePhotoStore {
 
     private void releaseTextureMap(Map<String, PhotoTexture> textureMap) {
         Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft == null) {
+            textureMap.clear();
+            return;
+        }
+
         for (PhotoTexture photoTexture : textureMap.values()) {
             minecraft.getTextureManager().release(photoTexture.textureId);
         }
@@ -307,7 +254,10 @@ final class PhonePhotoStore {
     private void releaseTexture(String fileName, Map<String, PhotoTexture> textureMap) {
         PhotoTexture removed = textureMap.remove(fileName);
         if (removed != null) {
-            Minecraft.getInstance().getTextureManager().release(removed.textureId);
+            Minecraft minecraft = Minecraft.getInstance();
+            if (minecraft != null) {
+                minecraft.getTextureManager().release(removed.textureId);
+            }
         }
     }
 

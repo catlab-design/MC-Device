@@ -11,6 +11,7 @@
     "homepage": "https://dotpp.xyz"
   },
   "license": "All Rights Reserved",
+  "icon": "assets/minedevice/mc_device.png",
   "environment": "*",
   "entrypoints": {
     "main": [
@@ -18,6 +19,9 @@
     ],
     "client": [
       "com.sammy.minedevice.fabric.client.MinedeviceFabricClient"
+    ],
+    "voicechat": [
+      "com.sammy.minedevice.voice.svc.MinedeviceSvcPlugin"
     ]
   },
   "mixins": [
@@ -31,6 +35,7 @@
     "fabric-api": "*"
   },
   "suggests": {
-    "plasmovoice": "*"
+    "plasmovoice": "*",
+    "voicechat": "*"
   }
 }

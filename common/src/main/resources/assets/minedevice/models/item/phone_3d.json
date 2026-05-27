@@ -4,6 +4,7 @@
 	"texture_size": [32, 32],
 	"textures": {
 		"2": "minedevice:item/phone",
+		"3": "minedevice:item/phone_tint",
 		"particle": "minedevice:item/phone"
 	},
 	"elements": [
@@ -18,6 +19,19 @@
 				"west": {"uv": [0.54829, 12.38162, 7.04829, 13.38162], "rotation": 90, "texture": "#2"},
 				"up": {"uv": [3.9595, 2.84424, 7.4595, 3.84424], "rotation": 180, "texture": "#2"},
 				"down": {"uv": [3.9595, 1.84424, 7.4595, 2.84424], "texture": "#2"}
+			}
+		},
+		{
+			"from": [4.99, -0.01, 8.99],
+			"to": [11.01, 13.01, 10.01],
+			"rotation": {"angle": 0, "axis": "y", "origin": [6, 0, 9]},
+			"faces": {
+				"north": {"uv": [7.64798, 0.34891, 0.16044, 15.12306], "texture": "#3", "tintindex": 0},
+				"east": {"uv": [0.56854, 13.52804, 7.06854, 14.52804], "rotation": 270, "texture": "#3", "tintindex": 0},
+				"south": {"uv": [15.76168, 15.37228, 8.27415, 0.34891], "rotation": 180, "texture": "#3", "tintindex": 0},
+				"west": {"uv": [0.54829, 12.38162, 7.04829, 13.38162], "rotation": 90, "texture": "#3", "tintindex": 0},
+				"up": {"uv": [3.9595, 2.84424, 7.4595, 3.84424], "rotation": 180, "texture": "#3", "tintindex": 0},
+				"down": {"uv": [3.9595, 1.84424, 7.4595, 2.84424], "texture": "#3", "tintindex": 0}
 			}
 		}
 	],

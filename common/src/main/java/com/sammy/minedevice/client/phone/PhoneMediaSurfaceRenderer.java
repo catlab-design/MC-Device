@@ -197,6 +197,10 @@ final class PhoneMediaSurfaceRenderer {
             return;
         }
 
+        if (screen.isBankScanCameraActive()) {
+            return;
+        }
+
         renderCameraStorageWarning(screen, guiGraphics);
         renderCameraZoomIndicator(screen, guiGraphics);
 

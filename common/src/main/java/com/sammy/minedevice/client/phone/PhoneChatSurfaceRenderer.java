@@ -15,28 +15,28 @@ import net.minecraft.util.Mth;
 import java.util.List;
 
 final class PhoneChatSurfaceRenderer {
-    private static final int PAGE_FILL = 0xFFF9FAFB; // Gray 50
-    private static final int PAGE_TINT = 0xFFF3F4F6; // Gray 100
-    private static final int HEADER_FILL = 0xFF6366F1; // Indigo 500
-    private static final int HEADER_FILL_DARK = 0xFF4F46E5; // Indigo 600
+    private static final int PAGE_FILL = 0xFFF9FAFB;
+    private static final int PAGE_TINT = 0xFFF3F4F6;
+    private static final int HEADER_FILL = 0xFF6366F1;
+    private static final int HEADER_FILL_DARK = 0xFF4F46E5;
     private static final int HEADER_CHIP_FILL = 0x22FFFFFF;
     private static final int CARD_FILL = 0xFFFFFFFF;
-    private static final int CARD_BORDER = 0xFFE5E7EB; // Gray 200
+    private static final int CARD_BORDER = 0xFFE5E7EB;
     private static final int FIELD_FILL = 0xFFFFFFFF;
-    private static final int FIELD_BORDER = 0xFFD1D5DB; // Gray 300
-    private static final int BUBBLE_OUTGOING = 0xFF6366F1; // Indigo 500
-    private static final int BUBBLE_OUTGOING_BORDER = 0xFF4F46E5; // Indigo 600
-    private static final int BUBBLE_INCOMING = 0xFFF3F4F6; // Gray 100
-    private static final int BUBBLE_INCOMING_BORDER = 0xFFE5E7EB; // Gray 200
-    private static final int ACTION_FILL = 0xFF4F46E5; // Indigo 600
-    private static final int ACTION_FILL_DARK = 0xFF4338CA; // Indigo 700
-    private static final int ACTION_DISABLED_FILL = 0xFFE5E7EB; // Gray 200
-    private static final int ACTION_DISABLED_DARK = 0xFFD1D5DB; // Gray 300
-    private static final int DELETE_FILL = 0xFFEF4444; // Red 500
-    private static final int DELETE_FILL_DARK = 0xFFDC2626; // Red 600
-    private static final int TEXT_PRIMARY = 0xFF111827; // Gray 900
-    private static final int TEXT_MUTED = 0xFF4B5563; // Gray 600
-    private static final int TEXT_FAINT = 0xFF9CA3AF; // Gray 400
+    private static final int FIELD_BORDER = 0xFFD1D5DB;
+    private static final int BUBBLE_OUTGOING = 0xFF6366F1;
+    private static final int BUBBLE_OUTGOING_BORDER = 0xFF4F46E5;
+    private static final int BUBBLE_INCOMING = 0xFFF3F4F6;
+    private static final int BUBBLE_INCOMING_BORDER = 0xFFE5E7EB;
+    private static final int ACTION_FILL = 0xFF4F46E5;
+    private static final int ACTION_FILL_DARK = 0xFF4338CA;
+    private static final int ACTION_DISABLED_FILL = 0xFFE5E7EB;
+    private static final int ACTION_DISABLED_DARK = 0xFFD1D5DB;
+    private static final int DELETE_FILL = 0xFFEF4444;
+    private static final int DELETE_FILL_DARK = 0xFFDC2626;
+    private static final int TEXT_PRIMARY = 0xFF111827;
+    private static final int TEXT_MUTED = 0xFF4B5563;
+    private static final int TEXT_FAINT = 0xFF9CA3AF;
     private static final int TEXT_LIGHT = 0xFFFFFFFF;
     private static final int SHADOW_SOFT = 0x0A000000;
 
@@ -44,15 +44,13 @@ final class PhoneChatSurfaceRenderer {
     }
 
     private static void renderRoundedPanel(GuiGraphics guiGraphics, int x, int y, int width, int height, int borderColor, int fillColor) {
-        // Main fill
         guiGraphics.fill(x + 1, y, x + width - 1, y + height, fillColor);
         guiGraphics.fill(x, y + 1, x + width, y + height - 1, fillColor);
 
-        // Border lines
-        guiGraphics.fill(x + 1, y, x + width - 1, y + 1, borderColor); // Top
-        guiGraphics.fill(x + 1, y + height - 1, x + width - 1, y + height, borderColor); // Bottom
-        guiGraphics.fill(x, y + 1, x + 1, y + height - 1, borderColor); // Left
-        guiGraphics.fill(x + width - 1, y + 1, x + width, y + height - 1, borderColor); // Right
+        guiGraphics.fill(x + 1, y, x + width - 1, y + 1, borderColor);
+        guiGraphics.fill(x + 1, y + height - 1, x + width - 1, y + height, borderColor);
+        guiGraphics.fill(x, y + 1, x + 1, y + height - 1, borderColor);
+        guiGraphics.fill(x + width - 1, y + 1, x + width, y + height - 1, borderColor);
     }
 
     private static void renderElevatedRoundedPanel(GuiGraphics guiGraphics, int x, int y, int width, int height, int borderColor, int fillColor, int shadowColor) {
@@ -81,7 +79,6 @@ final class PhoneChatSurfaceRenderer {
 
         guiGraphics.fill(contentBounds.left, contentBounds.top, contentBounds.right(), contentBounds.bottom(), PAGE_FILL);
         
-        // Header with more depth
         guiGraphics.fill(headerLeft, contentBounds.top, headerRight, heroBottom, HEADER_FILL);
         guiGraphics.fill(headerLeft, heroBottom - 1, headerRight, heroBottom, 0x15000000); 
         
@@ -195,7 +192,6 @@ final class PhoneChatSurfaceRenderer {
         guiGraphics.fill(contentBounds.left, contentBounds.top, contentBounds.right(), contentBounds.bottom(), PAGE_FILL);
         renderElevatedRoundedPanel(guiGraphics, topBounds.left, topBounds.top, topBounds.width, topBounds.height, HEADER_FILL_DARK, HEADER_FILL, SHADOW_SOFT);
         
-        // Slightly darker message area background for contrast
         renderRoundedPanel(guiGraphics, messagesBounds.left, messagesBounds.top, messagesBounds.width, messagesBounds.height, CARD_BORDER, 0xEEFFFFFF);
 
         renderProfileFace(guiGraphics, screen.getChatProfileTexture(activeNumber), avatarX, avatarY, avatarSize);

@@ -4,6 +4,7 @@ import com.sammy.minedevice.Minedevice;
 import com.sammy.minedevice.block.entity.HomePhoneRegistry.HomePhoneAddress;
 import com.sammy.minedevice.phone.PhoneCallManager;
 import com.sammy.minedevice.phone.PhoneCallManager.HomePhoneSpeakerBridge;
+import com.sammy.minedevice.phone.PhoneCallManager.PlayerCallBridge;
 import com.sammy.minedevice.phone.PhoneData;
 import dev.architectury.event.events.common.LifecycleEvent;
 import dev.architectury.event.events.common.TickEvent;
@@ -39,10 +40,12 @@ import java.util.UUID;
 
 public final class HomePhoneVoiceHook {
     private static final short SPEAKER_OUTPUT_DISTANCE = 12;
+    private static final double SOURCE_LINE_DEFAULT_VOLUME = 1.0D;
     private static final double SPEAKER_INPUT_RANGE_SQR = 64.0D;
     private static final String SOURCE_NAME_PREFIX = "Phone : ";
 
     private static final Map<HomePhoneAddress, SpeakerBridge> ACTIVE_BRIDGES = new HashMap<>();
+    private static final Map<UUID, PlayerBridge> ACTIVE_PLAYER_BRIDGES = new HashMap<>();
     private static boolean initialized;
     private static boolean addonLoaded;
     private static HomePhoneSpeakerAddon addon;
@@ -86,6 +89,10 @@ public final class HomePhoneVoiceHook {
         for (HomePhoneSpeakerBridge bridge : PhoneCallManager.snapshotHomePhoneSpeakerBridges(server)) {
             desiredByAddress.put(bridge.address(), bridge);
         }
+        Map<UUID, PlayerCallBridge> desiredPlayerBridges = new HashMap<>();
+        for (PlayerCallBridge bridge : PhoneCallManager.snapshotPlayerCallBridges(server)) {
+            desiredPlayerBridges.put(bridge.listenerPlayerId(), bridge);
+        }
 
         synchronized (ACTIVE_BRIDGES) {
             ACTIVE_BRIDGES.entrySet().removeIf(entry -> {
@@ -116,6 +123,36 @@ public final class HomePhoneVoiceHook {
                 }
             }
         }
+
+        synchronized (ACTIVE_PLAYER_BRIDGES) {
+            ACTIVE_PLAYER_BRIDGES.entrySet().removeIf(entry -> {
+                PlayerBridge activeBridge = entry.getValue();
+                PlayerCallBridge desiredBridge = desiredPlayerBridges.get(entry.getKey());
+                if (desiredBridge == null) {
+                    activeBridge.close();
+                    return true;
+                }
+
+                if (!activeBridge.matches(desiredBridge)) {
+                    activeBridge.close();
+                    return true;
+                }
+
+                activeBridge.refresh();
+                return false;
+            });
+
+            for (PlayerCallBridge desiredBridge : desiredPlayerBridges.values()) {
+                if (ACTIVE_PLAYER_BRIDGES.containsKey(desiredBridge.listenerPlayerId())) {
+                    continue;
+                }
+
+                PlayerBridge bridge = PlayerBridge.create(desiredBridge);
+                if (bridge != null) {
+                    ACTIVE_PLAYER_BRIDGES.put(desiredBridge.listenerPlayerId(), bridge);
+                }
+            }
+        }
     }
 
     private static void handleAudioPacket(VoiceServerPlayer sourcePlayer, PlayerAudioPacket audioPacket) {
@@ -138,6 +175,13 @@ public final class HomePhoneVoiceHook {
         for (SpeakerBridge bridge : bridges) {
             if (bridge.hasLocalTalker(sourcePlayerId)) {
                 bridge.routeLocalAudio(sourcePlayerId, sourcePlayer, audioPacket);
+            }
+        }
+
+        Collection<PlayerBridge> playerBridges = snapshotActivePlayerBridges();
+        for (PlayerBridge bridge : playerBridges) {
+            if (bridge.isRemotePlayer(sourcePlayerId)) {
+                bridge.playIncomingAudio(sourcePlayer, audioPacket);
             }
         }
     }
@@ -164,11 +208,24 @@ public final class HomePhoneVoiceHook {
                 bridge.routeLocalAudioEnd(sourcePlayerId, audioEndPacket);
             }
         }
+
+        Collection<PlayerBridge> playerBridges = snapshotActivePlayerBridges();
+        for (PlayerBridge bridge : playerBridges) {
+            if (bridge.isRemotePlayer(sourcePlayerId)) {
+                bridge.playIncomingAudioEnd(audioEndPacket);
+            }
+        }
     }
 
     private static Collection<SpeakerBridge> snapshotActiveBridges() {
         synchronized (ACTIVE_BRIDGES) {
             return List.copyOf(ACTIVE_BRIDGES.values());
+        }
+    }
+
+    private static Collection<PlayerBridge> snapshotActivePlayerBridges() {
+        synchronized (ACTIVE_PLAYER_BRIDGES) {
+            return List.copyOf(ACTIVE_PLAYER_BRIDGES.values());
         }
     }
 
@@ -178,6 +235,13 @@ public final class HomePhoneVoiceHook {
                 bridge.close();
             }
             ACTIVE_BRIDGES.clear();
+        }
+
+        synchronized (ACTIVE_PLAYER_BRIDGES) {
+            for (PlayerBridge bridge : ACTIVE_PLAYER_BRIDGES.values()) {
+                bridge.close();
+            }
+            ACTIVE_PLAYER_BRIDGES.clear();
         }
     }
 
@@ -244,7 +308,7 @@ public final class HomePhoneVoiceHook {
                     .createBuilder(this, "home_phone_speaker", "block.minedevice.home_phone",
                             Minedevice.MOD_ID + ":textures/gui/voice_overlay.png", 0)
                     .withPlayers(true)
-                    .setDefaultVolume(1.0D)
+                    .setDefaultVolume(SOURCE_LINE_DEFAULT_VOLUME)
                     .build();
         }
 
@@ -609,6 +673,123 @@ public final class HomePhoneVoiceHook {
         }
     }
 
+    private static final class PlayerBridge {
+        private final UUID listenerPlayerId;
+        private final UUID remotePlayerId;
+        private final String sourceName;
+        private ServerDirectSource listenerSource;
+        private volatile boolean closed;
+
+        private PlayerBridge(UUID listenerPlayerId, UUID remotePlayerId, String sourceName) {
+            this.listenerPlayerId = listenerPlayerId;
+            this.remotePlayerId = remotePlayerId;
+            this.sourceName = sourceName;
+        }
+
+        private static PlayerBridge create(PlayerCallBridge bridge) {
+            if (bridge == null || sourceLine == null) {
+                return null;
+            }
+
+            PlayerBridge playerBridge = new PlayerBridge(
+                    bridge.listenerPlayerId(),
+                    bridge.remotePlayerId(),
+                    buildSourceName(bridge.remoteDisplayName())
+            );
+            playerBridge.refresh();
+            return playerBridge;
+        }
+
+        private boolean matches(PlayerCallBridge bridge) {
+            return !closed
+                    && bridge != null
+                    && listenerPlayerId.equals(bridge.listenerPlayerId())
+                    && remotePlayerId.equals(bridge.remotePlayerId())
+                    && sourceName.equals(buildSourceName(bridge.remoteDisplayName()));
+        }
+
+        private boolean isRemotePlayer(UUID playerId) {
+            return !closed && remotePlayerId.equals(playerId);
+        }
+
+        private void refresh() {
+            if (closed || sourceLine == null) {
+                return;
+            }
+
+            VoiceServerPlayer listenerPlayer = resolveVoicePlayer(listenerPlayerId);
+            if (listenerPlayer == null) {
+                removeListenerSource();
+                return;
+            }
+
+            if (listenerSource != null) {
+                return;
+            }
+
+            try {
+                listenerSource = sourceLine.createDirectSource(listenerPlayer, false);
+                listenerSource.setIconVisible(false);
+                listenerSource.setCameraRelative(true);
+                listenerSource.setName(sourceName);
+            } catch (Throwable throwable) {
+                listenerSource = null;
+                Minedevice.LOGGER.debug("Unable to create mobile phone call listener source", throwable);
+            }
+        }
+
+        private void playIncomingAudio(VoiceServerPlayer sourcePlayer, PlayerAudioPacket audioPacket) {
+            if (closed || listenerSource == null) {
+                return;
+            }
+
+            try {
+                listenerSource.sendAudioFrame(
+                        audioPacket.getData(),
+                        audioPacket.getSequenceNumber(),
+                        new PlayerActivationInfo(sourcePlayer, audioPacket)
+                );
+            } catch (Throwable throwable) {
+                Minedevice.LOGGER.debug("Unable to forward mobile phone audio to listener", throwable);
+            }
+        }
+
+        private void playIncomingAudioEnd(PlayerAudioEndPacket audioEndPacket) {
+            if (closed || listenerSource == null) {
+                return;
+            }
+
+            try {
+                listenerSource.sendAudioEnd(audioEndPacket.getSequenceNumber());
+            } catch (Throwable throwable) {
+                Minedevice.LOGGER.debug("Unable to forward mobile phone audio end to listener", throwable);
+            }
+        }
+
+        private void close() {
+            if (closed) {
+                return;
+            }
+
+            closed = true;
+            removeListenerSource();
+        }
+
+        private void removeListenerSource() {
+            if (listenerSource == null) {
+                return;
+            }
+
+            try {
+                listenerSource.remove();
+            } catch (Throwable throwable) {
+                Minedevice.LOGGER.debug("Unable to remove mobile phone direct source", throwable);
+            } finally {
+                listenerSource = null;
+            }
+        }
+    }
+
     private static SpeakerBridge getActiveBridge(HomePhoneAddress address) {
         synchronized (ACTIVE_BRIDGES) {
             return ACTIVE_BRIDGES.get(address);
@@ -621,5 +802,13 @@ public final class HomePhoneVoiceHook {
         }
 
         return SOURCE_NAME_PREFIX + PhoneData.getHomePhoneNumber(address.dimension(), address.blockPos());
+    }
+
+    private static String buildSourceName(String remoteDisplayName) {
+        if (remoteDisplayName == null || remoteDisplayName.isBlank()) {
+            return "Phone";
+        }
+
+        return SOURCE_NAME_PREFIX + remoteDisplayName;
     }
 }
