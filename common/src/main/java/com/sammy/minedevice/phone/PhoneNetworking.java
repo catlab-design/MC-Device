@@ -23,6 +23,7 @@ import net.minecraft.world.item.ItemStack;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 
 public final class PhoneNetworking {
@@ -213,8 +214,12 @@ public final class PhoneNetworking {
         });
 
         PlayerEvent.PLAYER_JOIN.register(player -> {
-            PhoneCallManager.syncPlayer(player);
-            syncChatState(player);
+            try {
+                PhoneCallManager.syncPlayer(player);
+            } catch (Throwable throwable) {
+                Minedevice.LOGGER.error("Failed to sync phone call state for {}", player.getGameProfile().getName(), throwable);
+            }
+            scheduleChatStateSync(player);
         });
         TickEvent.SERVER_PRE.register(server -> {
             pruneBankReceivers(server);
@@ -294,7 +299,7 @@ public final class PhoneNetworking {
             return;
         }
 
-        RegistryFriendlyByteBuf buf = NetworkBufferUtils.create();
+        RegistryFriendlyByteBuf buf = NetworkBufferUtils.create(player);
         ComponentSerialization.STREAM_CODEC.encode(buf, title);
         ComponentSerialization.STREAM_CODEC.encode(buf, message);
         NetworkManager.sendToPlayer(player, PHONE_TOAST, buf);
@@ -315,10 +320,47 @@ public final class PhoneNetworking {
             return;
         }
 
-        RegistryFriendlyByteBuf buf = NetworkBufferUtils.create();
-        PhoneChatStatePayload payload = ChatStorageManager.isAvailable()
-                ? ChatStorageManager.getInstance().createPayload(player.getUUID())
-                : new PhoneChatStatePayload(List.of(), List.of());
+        sendChatStatePayload(player, loadChatPayload(player.getUUID()));
+    }
+
+    private static void scheduleChatStateSync(ServerPlayer player) {
+        if (player == null || player.getServer() == null) {
+            return;
+        }
+
+        UUID ownerUuid = player.getUUID();
+        MinecraftServer server = player.getServer();
+        CompletableFuture.supplyAsync(() -> loadChatPayload(ownerUuid))
+                .whenCompleteAsync((payload, error) -> {
+                    if (error != null) {
+                        Minedevice.LOGGER.error("Failed to load chat state for {}", ownerUuid, error);
+                        return;
+                    }
+                    ServerPlayer current = server.getPlayerList().getPlayer(ownerUuid);
+                    if (current == null || current.connection == null) {
+                        return;
+                    }
+                    try {
+                        sendChatStatePayload(current, payload);
+                    } catch (Throwable throwable) {
+                        Minedevice.LOGGER.error("Failed to send chat state to {}", ownerUuid, throwable);
+                    }
+                }, server);
+    }
+
+    private static PhoneChatStatePayload loadChatPayload(UUID ownerUuid) {
+        try {
+            return ChatStorageManager.isAvailable()
+                    ? ChatStorageManager.getInstance().createPayload(ownerUuid)
+                    : new PhoneChatStatePayload(List.of(), List.of());
+        } catch (Throwable throwable) {
+            Minedevice.LOGGER.error("Failed to load chat payload for {}", ownerUuid, throwable);
+            return new PhoneChatStatePayload(List.of(), List.of());
+        }
+    }
+
+    private static void sendChatStatePayload(ServerPlayer player, PhoneChatStatePayload payload) {
+        RegistryFriendlyByteBuf buf = NetworkBufferUtils.create(player);
         payload.write(buf);
         NetworkManager.sendToPlayer(player, CHAT_STATE_SYNC, buf);
     }
@@ -332,7 +374,7 @@ public final class PhoneNetworking {
             return;
         }
 
-        RegistryFriendlyByteBuf buf = NetworkBufferUtils.create();
+        RegistryFriendlyByteBuf buf = NetworkBufferUtils.create(player);
         buf.writeLong(AtmAccountStore.get(player.getServer()).getBalance(player.getUUID()));
         buf.writeBoolean(status != null);
         if (status != null) {

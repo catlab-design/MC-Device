@@ -309,11 +309,19 @@ public final class PhoneNetworkingClient {
     }
 
     public static void requestAppendPhotoMetadata(InteractionHand preferredHand, String photoFileName, ItemStack captureStack) {
-        RegistryFriendlyByteBuf buf = NetworkBufferUtils.create();
+        RegistryFriendlyByteBuf buf = NetworkBufferUtils.create(clientRegistryAccess());
         buf.writeEnum(preferredHand == null ? InteractionHand.MAIN_HAND : preferredHand);
         buf.writeUtf(photoFileName == null ? "" : photoFileName, com.sammy.minedevice.phone.PhonePhotoData.MAX_PHOTO_FILE_NAME_LENGTH);
         ItemStack.OPTIONAL_STREAM_CODEC.encode(buf, captureStack == null ? ItemStack.EMPTY : captureStack);
         NetworkManager.sendToServer(PhoneNetworking.PHOTO_APPEND, buf);
+    }
+
+    private static net.minecraft.core.RegistryAccess clientRegistryAccess() {
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft != null && minecraft.level != null) {
+            return minecraft.level.registryAccess();
+        }
+        return net.minecraft.core.RegistryAccess.EMPTY;
     }
 
     public static void requestDeletePhotoMetadata(InteractionHand preferredHand, String photoFileName) {
