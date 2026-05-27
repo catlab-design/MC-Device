@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "id": "minedevice",
+  "version": "${version}",
+  "name": "MineDevice",
+  "description": "Usable mobile phone, home phone, walkie radio, megaphone, ATM, and airstrike tools.",
+  "authors": [
+    "Q Team Studio"
+  ],
+  "contact": {
+    "homepage": "https://dotpp.xyz"
+  },
+  "license": "All-Rights-Reserved",
+  "icon": "assets/minedevice/mc_device.png",
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      "com.sammy.minedevice.fabric.MinedeviceFabric"
+    ],
+    "client": [
+      "com.sammy.minedevice.fabric.client.MinedeviceFabricClient"
+    ],
+    "voicechat": [
+      "com.sammy.minedevice.voice.svc.MinedeviceSvcPlugin"
+    ]
+  },
+  "mixins": [
+    "minedevice.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=0.19.2",
+    "minecraft": "~1.21.1",
+    "java": ">=21",
+    "architectury": ">=13.0.8",
+    "fabric-api": "*"
+  },
+  "suggests": {
+    "plasmovoice": "*",
+    "voicechat": "*"
+  }
+}

@@ -1,0 +1,60 @@
+{
+	"format_version": "1.9.0",
+	"credit": "Made with Blockbench",
+	"textures": {
+		"0": "minedevice:item/bill20",
+		"particle": "minedevice:item/bill20"
+	},
+	"elements": [
+		{
+			"from": [5, 2, 2],
+			"to": [11, 2, 14],
+			"rotation": {"angle": 0, "axis": "y", "origin": [8, 2, 8]},
+			"faces": {
+				"north": {"uv": [0, 2, 9, 2], "texture": "#0"},
+				"east": {"uv": [0, 2, 4, 2], "texture": "#0"},
+				"south": {"uv": [2, 2, 11, 2], "texture": "#0"},
+				"west": {"uv": [2, 2, 6, 2], "texture": "#0"},
+				"up": {"uv": [0, 0, 16, 16], "rotation": 90, "texture": "#0"},
+				"down": {"uv": [0, 0, 16, 16], "rotation": 270, "texture": "#0"}
+			}
+		}
+	],
+	"overrides": [
+		{"predicate": {"minedevice:stacked": 1}, "model": "minedevice:item/bill20_stack"}
+	],
+	"display": {
+		"thirdperson_righthand": {
+			"rotation": [125.25, 0, 0],
+			"translation": [0, -0.5, 3.5],
+			"scale": [0.45, 0.45, 0.45]
+		},
+		"thirdperson_lefthand": {
+			"rotation": [125.25, 0, 0],
+			"translation": [0, -0.5, 3.5],
+			"scale": [0.45, 0.45, 0.45]
+		},
+		"firstperson_righthand": {
+			"rotation": [65.75, 0, 0],
+			"translation": [-0.25, 3.25, 3.5],
+			"scale": [0.5, 0.5, 0.5]
+		},
+		"firstperson_lefthand": {
+			"rotation": [65.75, 0, 0],
+			"translation": [-0.25, 3.25, 3.5],
+			"scale": [0.5, 0.5, 0.5]
+		},
+		"ground": {
+			"translation": [0, 5.25, 0],
+			"scale": [0.6, 0.6, 0.6]
+		},
+		"gui": {
+			"rotation": [59.38, 43.75, -5.52],
+			"translation": [0.75, 3.25, 0]
+		},
+		"fixed": {
+			"rotation": [-90, -90, 0],
+			"translation": [0, 0, -5.5]
+		}
+	}
+}

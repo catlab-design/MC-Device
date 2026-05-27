@@ -1,0 +1,52 @@
+modLoader = "javafml"
+loaderVersion = "[2,)"
+#issueTrackerURL = ""
+license = "All Rights Reserved"
+
+[[mods]]
+modId = "minedevice"
+version = "${version}"
+displayName = "MineDevice"
+authors = "Q Team Studio"
+description = '''
+Usable mobile phone, home phone, walkie radio, megaphone, ATM, and airstrike tools.
+'''
+logoFile = "mc_device.png"
+
+[[dependencies.minedevice]]
+modId = "neoforge"
+type = "required"
+versionRange = "[21,)"
+ordering = "NONE"
+side = "BOTH"
+
+[[dependencies.minedevice]]
+modId = "minecraft"
+type = "required"
+versionRange = "[1.21.1,)"
+ordering = "NONE"
+side = "BOTH"
+
+[[dependencies.minedevice]]
+modId = "architectury"
+type = "required"
+versionRange = "[13.0.8,)"
+ordering = "AFTER"
+side = "BOTH"
+
+[[dependencies.minedevice]]
+modId = "plasmovoice"
+type = "optional"
+versionRange = "[0,)"
+ordering = "AFTER"
+side = "CLIENT"
+
+[[dependencies.minedevice]]
+modId = "voicechat"
+type = "optional"
+versionRange = "[0,)"
+ordering = "AFTER"
+side = "BOTH"
+
+[[mixins]]
+config = "minedevice.mixins.json"
