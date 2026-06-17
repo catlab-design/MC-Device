@@ -15,6 +15,7 @@
   "item.minedevice.home_phone": "Home Phone",
   "item.minedevice.home_phone_handset": "Home Phone Handset",
   "screen.minedevice.atm.title": "ATM",
+  "screen.minedevice.atm.insert_card": "Insert ATM card",
   "screen.minedevice.atm.balance": "Balance",
   "screen.minedevice.atm.hint": "Deposit bills or withdraw cash",
   "screen.minedevice.atm.deposit_all": "Deposit All",
