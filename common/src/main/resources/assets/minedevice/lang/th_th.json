@@ -15,6 +15,7 @@
   "item.minedevice.home_phone": "โทรศัพท์บ้าน",
   "item.minedevice.home_phone_handset": "หูโทรศัพท์บ้าน",
   "screen.minedevice.atm.title": "ATM",
+  "screen.minedevice.atm.insert_card": "เสียบบัตรเอทีเอ็ม",
   "screen.minedevice.atm.balance": "ยอดเงิน",
   "screen.minedevice.atm.hint": "ฝากธนบัตรหรือถอนเงินสด",
   "screen.minedevice.atm.deposit_all": "ฝากทั้งหมด",
