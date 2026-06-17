@@ -39,9 +39,9 @@ import java.util.Set;
 import java.util.UUID;
 
 public final class HomePhoneVoiceHook {
-    private static final short SPEAKER_OUTPUT_DISTANCE = 12;
+    private static final short SPEAKER_OUTPUT_DISTANCE = Short.MAX_VALUE;
     private static final double SOURCE_LINE_DEFAULT_VOLUME = 1.0D;
-    private static final double SPEAKER_INPUT_RANGE_SQR = 64.0D;
+    private static final double SPEAKER_INPUT_RANGE_SQR = Double.MAX_VALUE;
     private static final String SOURCE_NAME_PREFIX = "Phone : ";
 
     private static final Map<HomePhoneAddress, SpeakerBridge> ACTIVE_BRIDGES = new HashMap<>();
@@ -294,8 +294,8 @@ public final class HomePhoneVoiceHook {
             id = "minedevice_home_phone",
             name = "MineDevice Home Phone",
             scope = AddonLoaderScope.SERVER,
-            version = "1.0.0",
-            authors = {"Q Team Studio"}
+            version = "1.1.1",
+            authors = {"CatLab Design"}
     )
     private static final class HomePhoneSpeakerAddon implements AddonInitializer {
         @InjectPlasmoVoice

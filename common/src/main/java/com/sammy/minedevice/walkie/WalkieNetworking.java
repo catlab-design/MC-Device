@@ -15,7 +15,7 @@ public final class WalkieNetworking {
     public static final ResourceLocation TUNE = id("walkie_tune");
     public static final ResourceLocation TRANSMIT = id("walkie_transmit");
     public static final ResourceLocation TALK_STATE = id("walkie_talk_state");
-    private static final double TRANSMIT_RANGE = 96.0D;
+    private static final double TRANSMIT_RANGE = Double.MAX_VALUE;
     private static boolean initialized;
 
     private WalkieNetworking() {

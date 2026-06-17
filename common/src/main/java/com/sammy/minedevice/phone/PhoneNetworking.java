@@ -972,10 +972,7 @@ public final class PhoneNetworking {
             return null;
         }
 
-        double centerX = homePhonePos.getX() + 0.5D;
-        double centerY = homePhonePos.getY() + 0.5D;
-        double centerZ = homePhonePos.getZ() + 0.5D;
-        return player.distanceToSqr(centerX, centerY, centerZ) <= 64.0D ? homePhone : null;
+        return homePhone;
     }
 
     private static BlockPos readHomePhoneContext(RegistryFriendlyByteBuf buf) {

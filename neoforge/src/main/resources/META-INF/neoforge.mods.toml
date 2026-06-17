@@ -1,13 +1,13 @@
 modLoader = "javafml"
 loaderVersion = "[2,)"
 #issueTrackerURL = ""
-license = "All Rights Reserved"
+license = "PolyForm Noncommercial 1.0.0"
 
 [[mods]]
 modId = "minedevice"
 version = "${version}"
 displayName = "MineDevice"
-authors = "Q Team Studio"
+authors = "CatLab Design"
 description = '''
 Usable mobile phone, home phone, walkie radio, megaphone, ATM, and airstrike tools.
 '''

@@ -5,12 +5,12 @@
   "name": "MineDevice",
   "description": "Usable mobile phone, home phone, walkie radio, megaphone, ATM, and airstrike tools.",
   "authors": [
-    "Q Team Studio"
+    "CatLab Design"
   ],
   "contact": {
     "homepage": "https://dotpp.xyz"
   },
-  "license": "All-Rights-Reserved",
+  "license": "PolyForm Noncommercial 1.0.0",
   "icon": "assets/minedevice/mc_device.png",
   "environment": "*",
   "entrypoints": {

@@ -127,8 +127,8 @@ public final class MegaphoneVoiceHook {
             id = "minedevice_megaphone",
             name = "MineDevice Megaphone",
             scope = AddonLoaderScope.CLIENT,
-            version = "1.0.0",
-            authors = {"Q Team Studio"}
+            version = "1.1.1",
+            authors = {"CatLab Design"}
     )
     private static final class MegaphoneAddon implements AddonInitializer {
         @InjectPlasmoVoice

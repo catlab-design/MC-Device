@@ -26,7 +26,7 @@ import java.util.UUID;
 
 public final class SvcWalkieVoiceHook {
 
-    private static final short WALKIE_OUTPUT_DISTANCE = 96;
+    private static final short WALKIE_OUTPUT_DISTANCE = Short.MAX_VALUE;
     private static final float WALKIE_VOICE_GAIN = 2.35F;
     private static final float CONNECT_SOUND_VOLUME = 1.35F;
     private static final float CLOSE_SOUND_VOLUME = 1.25F;

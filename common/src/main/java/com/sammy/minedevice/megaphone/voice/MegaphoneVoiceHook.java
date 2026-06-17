@@ -236,8 +236,8 @@ public final class MegaphoneVoiceHook {
             id = "minedevice_megaphone_server",
             name = "MineDevice Megaphone",
             scope = AddonLoaderScope.SERVER,
-            version = "1.0.0",
-            authors = {"Q Team Studio"}
+            version = "1.1.1",
+            authors = {"CatLab Design"}
     )
     private static final class MegaphoneAddon implements AddonInitializer {
         @InjectPlasmoVoice
