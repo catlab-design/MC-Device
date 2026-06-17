@@ -38,6 +38,7 @@ public final class ModCreativeTabs {
         CreativeTabRegistry.append(MAIN, ModItems.BILL100);
         CreativeTabRegistry.append(MAIN, ModItems.BILL500);
         CreativeTabRegistry.append(MAIN, ModItems.BILL1000);
+        CreativeTabRegistry.append(MAIN, ModItems.CARD);
         CreativeTabRegistry.append(MAIN, ModItems.ATM);
     }
 

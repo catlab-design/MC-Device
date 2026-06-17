@@ -1,6 +1,7 @@
 package com.sammy.minedevice;
 
 import com.sammy.minedevice.item.AirstrikeRadioItem;
+import com.sammy.minedevice.item.CardItem;
 import com.sammy.minedevice.item.HomePhoneHandsetItem;
 import com.sammy.minedevice.item.MegaphoneItem;
 import com.sammy.minedevice.item.PhoneItem;
@@ -46,6 +47,9 @@ public final class ModItems {
 
     public static final RegistrySupplier<Item> ATM = ITEMS.register("atm",
             () -> new BlockItem(ModBlocks.ATM.get(), new Item.Properties().stacksTo(1)));
+
+    public static final RegistrySupplier<Item> CARD = ITEMS.register("card",
+            () -> new CardItem(new Item.Properties().stacksTo(1)));
 
     private ModItems() {
     }

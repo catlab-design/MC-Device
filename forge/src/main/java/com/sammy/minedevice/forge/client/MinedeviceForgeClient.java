@@ -4,6 +4,7 @@ import com.sammy.minedevice.ModItems;
 import com.sammy.minedevice.ModParticles;
 import com.sammy.minedevice.client.MinedeviceClient;
 import com.sammy.minedevice.client.particle.MegaphoneWaveParticle;
+import com.sammy.minedevice.item.CardItem;
 import com.sammy.minedevice.item.MegaphoneItem;
 import com.sammy.minedevice.item.PhoneItem;
 import net.minecraftforge.eventbus.api.IEventBus;
@@ -40,5 +41,12 @@ public final class MinedeviceForgeClient {
                                 ? phoneItem.getColor(stack)
                                 : -1,
                 ModItems.PHONE.get());
+        event.register((stack, tintIndex) ->
+                        tintIndex == 0 && stack.getItem() instanceof CardItem cardItem
+                                ? cardItem.getColor(stack)
+                                : -1,
+                ModItems.CARD.get());
     }
+
+}
 }
