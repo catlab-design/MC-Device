@@ -9,6 +9,7 @@ import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 public final class ChatDatabase {
     private static final String CREATE_FRIENDS_TABLE = """
@@ -40,6 +41,7 @@ public final class ChatDatabase {
             "CREATE INDEX IF NOT EXISTS idx_friends_owner ON chat_friends(owner_uuid)";
 
     private final Connection connection;
+    private final ReentrantReadWriteLock dbLock = new ReentrantReadWriteLock();
 
     public ChatDatabase(String dbPath) {
         try {
@@ -68,9 +70,9 @@ public final class ChatDatabase {
             return;
         }
 
-        boolean originalAutoCommit;
+        dbLock.writeLock().lock();
         try {
-            originalAutoCommit = connection.getAutoCommit();
+            boolean originalAutoCommit = connection.getAutoCommit();
             connection.setAutoCommit(false);
             try {
                 for (ChatCache.BatchOperation operation : operations) {
@@ -102,151 +104,188 @@ public final class ChatDatabase {
             }
         } catch (SQLException exception) {
             throw new RuntimeException("Failed to save chat batch", exception);
+        } finally {
+            dbLock.writeLock().unlock();
         }
     }
 
     public boolean addFriend(UUID ownerUuid, String friendNumber, String friendName, UUID profileId) {
+        dbLock.writeLock().lock();
         try {
             return addFriendInternal(ownerUuid, friendNumber, friendName, profileId);
         } catch (SQLException e) {
             return false;
+        } finally {
+            dbLock.writeLock().unlock();
         }
     }
 
     public List<StoredFriend> getFriends(UUID ownerUuid) {
-        String sql = "SELECT friend_name, friend_number, profile_id FROM chat_friends WHERE owner_uuid = ?";
-        List<StoredFriend> friends = new ArrayList<>();
-        try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
-            pstmt.setString(1, ownerUuid.toString());
-            ResultSet rs = pstmt.executeQuery();
-            while (rs.next()) {
-                friends.add(new StoredFriend(
-                        rs.getString("friend_name"),
-                        rs.getString("friend_number"),
-                        parseUuid(rs.getString("profile_id"))
-                ));
+        dbLock.readLock().lock();
+        try {
+            String sql = "SELECT friend_name, friend_number, profile_id FROM chat_friends WHERE owner_uuid = ?";
+            List<StoredFriend> friends = new ArrayList<>();
+            try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
+                pstmt.setString(1, ownerUuid.toString());
+                ResultSet rs = pstmt.executeQuery();
+                while (rs.next()) {
+                    friends.add(new StoredFriend(
+                            rs.getString("friend_name"),
+                            rs.getString("friend_number"),
+                            parseUuid(rs.getString("profile_id"))
+                    ));
+                }
+            } catch (SQLException ignored) {
             }
-        } catch (SQLException ignored) {
+            return friends;
+        } finally {
+            dbLock.readLock().unlock();
         }
-        return friends;
     }
 
     public boolean removeFriend(UUID ownerUuid, String friendNumber) {
+        dbLock.writeLock().lock();
         try {
             return removeFriendInternal(ownerUuid, friendNumber);
         } catch (SQLException e) {
             return false;
+        } finally {
+            dbLock.writeLock().unlock();
         }
     }
 
     public boolean addMessage(UUID ownerUuid, String otherNumber, String messageText,
                               boolean isIncoming, String otherName, UUID otherProfileId) {
+        dbLock.writeLock().lock();
         try {
             return addMessageInternal(ownerUuid, otherNumber, messageText, isIncoming, otherName, otherProfileId);
         } catch (SQLException e) {
             return false;
+        } finally {
+            dbLock.writeLock().unlock();
         }
     }
 
     public List<PhoneChatMessage> getMessages(UUID ownerUuid, String otherNumber, int limit) {
-        String sql = """
-                SELECT message_text, is_incoming
-                FROM chat_messages
-                WHERE owner_uuid = ? AND other_number = ?
-                ORDER BY timestamp DESC, id DESC
-                LIMIT ?
-                """;
-        List<PhoneChatMessage> messages = new ArrayList<>();
-        try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
-            pstmt.setString(1, ownerUuid.toString());
-            pstmt.setString(2, otherNumber);
-            pstmt.setInt(3, limit);
-            ResultSet rs = pstmt.executeQuery();
-            while (rs.next()) {
-                messages.add(new PhoneChatMessage(rs.getString("message_text"), rs.getInt("is_incoming") == 1));
+        dbLock.readLock().lock();
+        try {
+            String sql = """
+                    SELECT message_text, is_incoming
+                    FROM chat_messages
+                    WHERE owner_uuid = ? AND other_number = ?
+                    ORDER BY timestamp DESC, id DESC
+                    LIMIT ?
+                    """;
+            List<PhoneChatMessage> messages = new ArrayList<>();
+            try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
+                pstmt.setString(1, ownerUuid.toString());
+                pstmt.setString(2, otherNumber);
+                pstmt.setInt(3, limit);
+                ResultSet rs = pstmt.executeQuery();
+                while (rs.next()) {
+                    messages.add(new PhoneChatMessage(rs.getString("message_text"), rs.getInt("is_incoming") == 1));
+                }
+                java.util.Collections.reverse(messages);
+            } catch (SQLException ignored) {
             }
-            java.util.Collections.reverse(messages);
-        } catch (SQLException ignored) {
+            return messages;
+        } finally {
+            dbLock.readLock().unlock();
         }
-        return messages;
     }
 
     public boolean removeConversation(UUID ownerUuid, String otherNumber) {
+        dbLock.writeLock().lock();
         try {
             return removeConversationInternal(ownerUuid, otherNumber);
         } catch (SQLException e) {
             return false;
+        } finally {
+            dbLock.writeLock().unlock();
         }
     }
 
     public String getFriendName(UUID ownerUuid, String friendNumber) {
-        String sql = "SELECT friend_name FROM chat_friends WHERE owner_uuid = ? AND friend_number = ?";
-        try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
-            pstmt.setString(1, ownerUuid.toString());
-            pstmt.setString(2, friendNumber);
-            ResultSet rs = pstmt.executeQuery();
-            if (rs.next()) {
-                return rs.getString("friend_name");
+        dbLock.readLock().lock();
+        try {
+            String sql = "SELECT friend_name FROM chat_friends WHERE owner_uuid = ? AND friend_number = ?";
+            try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
+                pstmt.setString(1, ownerUuid.toString());
+                pstmt.setString(2, friendNumber);
+                ResultSet rs = pstmt.executeQuery();
+                if (rs.next()) {
+                    return rs.getString("friend_name");
+                }
+            } catch (SQLException ignored) {
             }
-        } catch (SQLException ignored) {
-        }
 
-        String sql2 = """
-                SELECT other_name
-                FROM chat_messages
-                WHERE owner_uuid = ? AND other_number = ?
-                ORDER BY timestamp DESC, id DESC
-                LIMIT 1
-                """;
-        try (PreparedStatement pstmt = connection.prepareStatement(sql2)) {
-            pstmt.setString(1, ownerUuid.toString());
-            pstmt.setString(2, friendNumber);
-            ResultSet rs = pstmt.executeQuery();
-            if (rs.next()) {
-                return rs.getString("other_name");
+            String sql2 = """
+                    SELECT other_name
+                    FROM chat_messages
+                    WHERE owner_uuid = ? AND other_number = ?
+                    ORDER BY timestamp DESC, id DESC
+                    LIMIT 1
+                    """;
+            try (PreparedStatement pstmt = connection.prepareStatement(sql2)) {
+                pstmt.setString(1, ownerUuid.toString());
+                pstmt.setString(2, friendNumber);
+                ResultSet rs = pstmt.executeQuery();
+                if (rs.next()) {
+                    return rs.getString("other_name");
+                }
+            } catch (SQLException ignored) {
             }
-        } catch (SQLException ignored) {
+            return null;
+        } finally {
+            dbLock.readLock().unlock();
         }
-        return null;
     }
 
     public UUID getFriendProfileId(UUID ownerUuid, String friendNumber) {
-        String sql = "SELECT profile_id FROM chat_friends WHERE owner_uuid = ? AND friend_number = ?";
-        try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
-            pstmt.setString(1, ownerUuid.toString());
-            pstmt.setString(2, friendNumber);
-            ResultSet rs = pstmt.executeQuery();
-            if (rs.next()) {
-                return parseUuid(rs.getString("profile_id"));
+        dbLock.readLock().lock();
+        try {
+            String sql = "SELECT profile_id FROM chat_friends WHERE owner_uuid = ? AND friend_number = ?";
+            try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
+                pstmt.setString(1, ownerUuid.toString());
+                pstmt.setString(2, friendNumber);
+                ResultSet rs = pstmt.executeQuery();
+                if (rs.next()) {
+                    return parseUuid(rs.getString("profile_id"));
+                }
+            } catch (SQLException ignored) {
             }
-        } catch (SQLException ignored) {
-        }
 
-        String sql2 = """
-                SELECT other_profile_id
-                FROM chat_messages
-                WHERE owner_uuid = ? AND other_number = ? AND other_profile_id IS NOT NULL
-                ORDER BY timestamp DESC, id DESC
-                LIMIT 1
-                """;
-        try (PreparedStatement pstmt = connection.prepareStatement(sql2)) {
-            pstmt.setString(1, ownerUuid.toString());
-            pstmt.setString(2, friendNumber);
-            ResultSet rs = pstmt.executeQuery();
-            if (rs.next()) {
-                return parseUuid(rs.getString("other_profile_id"));
+            String sql2 = """
+                    SELECT other_profile_id
+                    FROM chat_messages
+                    WHERE owner_uuid = ? AND other_number = ? AND other_profile_id IS NOT NULL
+                    ORDER BY timestamp DESC, id DESC
+                    LIMIT 1
+                    """;
+            try (PreparedStatement pstmt = connection.prepareStatement(sql2)) {
+                pstmt.setString(1, ownerUuid.toString());
+                pstmt.setString(2, friendNumber);
+                ResultSet rs = pstmt.executeQuery();
+                if (rs.next()) {
+                    return parseUuid(rs.getString("other_profile_id"));
+                }
+            } catch (SQLException ignored) {
             }
-        } catch (SQLException ignored) {
+            return null;
+        } finally {
+            dbLock.readLock().unlock();
         }
-        return null;
     }
 
     public void close() {
+        dbLock.writeLock().lock();
         try {
             if (!connection.isClosed()) {
                 connection.close();
             }
         } catch (SQLException ignored) {
+        } finally {
+            dbLock.writeLock().unlock();
         }
     }
 

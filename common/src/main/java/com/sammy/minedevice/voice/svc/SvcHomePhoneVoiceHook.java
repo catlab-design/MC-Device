@@ -28,8 +28,8 @@ import java.util.UUID;
 
 public final class SvcHomePhoneVoiceHook {
 
-    private static final short SPEAKER_OUTPUT_DISTANCE = 12;
-    private static final double SPEAKER_INPUT_RANGE_SQR = 64.0D;
+    private static final short SPEAKER_OUTPUT_DISTANCE = Short.MAX_VALUE;
+    private static final double SPEAKER_INPUT_RANGE_SQR = Double.MAX_VALUE;
 
     private static final Map<HomePhoneAddress, SpeakerBridge> ACTIVE_BRIDGES = new HashMap<>();
     private static final Map<UUID, PlayerBridge> ACTIVE_PLAYER_BRIDGES = new HashMap<>();

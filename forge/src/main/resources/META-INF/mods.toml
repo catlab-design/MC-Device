@@ -1,13 +1,13 @@
 modLoader = "javafml"
 loaderVersion = "[47,)"
 #issueTrackerURL = ""
-license = "All Rights Reserved"
+license = "PolyForm Noncommercial 1.0.0"
 
 [[mods]]
 modId = "minedevice"
 version = "${version}"
 displayName = "MineDevice"
-authors = "SamSu255"
+authors = "CatLab Design"
 description = '''
 
 Adds mobile and home phone devices with calling, chat, camera, and optional voice features.

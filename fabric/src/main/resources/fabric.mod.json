@@ -5,12 +5,12 @@
   "name": "MineDevice",
   "description": "Adds mobile and home phone devices with calling, chat, camera, and optional voice features.",
   "authors": [
-    "SamSu255"
+    "CatLab Design"
   ],
   "contact": {
     "homepage": "https://dotpp.xyz"
   },
-  "license": "All Rights Reserved",
+  "license": "PolyForm Noncommercial 1.0.0",
   "icon": "assets/minedevice/mc_device.png",
   "environment": "*",
   "entrypoints": {

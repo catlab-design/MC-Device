@@ -6,12 +6,12 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.Level;
 
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 public final class HomePhoneRegistry {
-    private static final Map<HomePhoneAddress, HomePhoneBlockEntity> LOADED_PHONES = new HashMap<>();
+    private static final Map<HomePhoneAddress, HomePhoneBlockEntity> LOADED_PHONES = new ConcurrentHashMap<>();
 
     private HomePhoneRegistry() {
     }

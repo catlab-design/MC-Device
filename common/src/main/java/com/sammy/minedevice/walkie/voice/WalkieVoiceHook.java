@@ -37,7 +37,7 @@ import java.util.Set;
 import java.util.UUID;
 
 public final class WalkieVoiceHook {
-    private static final short WALKIE_OUTPUT_DISTANCE = 96;
+    private static final short WALKIE_OUTPUT_DISTANCE = Short.MAX_VALUE;
     private static final int WALKIE_OUTPUT_ANGLE = 360;
     private static final float CONNECT_SOUND_VOLUME = 1.35F;
     private static final float CLOSE_SOUND_VOLUME = 1.25F;
@@ -319,8 +319,8 @@ public final class WalkieVoiceHook {
             id = "minedevice_walkie_server",
             name = "MineDevice Walkie",
             scope = AddonLoaderScope.SERVER,
-            version = "1.0.0",
-            authors = {"Q Team Studio"}
+            version = "1.1.0",
+            authors = {"CatLab Design"}
     )
     private static final class WalkieAddon implements AddonInitializer {
         @InjectPlasmoVoice

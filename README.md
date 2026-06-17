@@ -74,10 +74,10 @@ or
 
 ## License
 
-This project is `All Rights Reserved`.
+This project is licensed under the `PolyForm Noncommercial License 1.0.0`.
 
 See [`LICENSE.txt`](LICENSE.txt).
 
 ## Author
 
-- `SamSu255`
+- `CatLab Design`

@@ -127,8 +127,8 @@ public final class PhoneCallVoiceHook {
             id = "minedevice_phone_call",
             name = "MineDevice Phone Call",
             scope = AddonLoaderScope.CLIENT,
-            version = "1.0.0",
-            authors = {"Q Team Studio"}
+            version = "1.1.0",
+            authors = {"CatLab Design"}
     )
     private static final class PhoneCallAddon implements AddonInitializer {
         @InjectPlasmoVoice

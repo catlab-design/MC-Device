@@ -17,21 +17,21 @@ import net.minecraft.core.BlockPos;
 
 import java.util.ArrayList;
 import java.util.HashSet;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 public final class PhoneCallManager {
     private static final int UNANSWERED_CALL_TIMEOUT_TICKS = 20 * 20;
     private static final int MISSED_STATE_TICKS = 5 * 20;
     private static final int SPEAKER_EMPTY_HANGUP_TICKS = 10 * 20;
-    private static final double HANDSET_RETURN_DISTANCE_SQR = 6.0D * 6.0D;
-    private static final double SPEAKER_AUTO_HANGUP_DISTANCE_SQR = 10.0D * 10.0D;
-    private static final Map<UUID, CallSession> ACTIVE_PLAYER_CALLS = new HashMap<>();
-    private static final Map<HomePhoneAddress, CallSession> ACTIVE_HOME_PHONE_CALLS = new HashMap<>();
-    private static final Map<HomePhoneAddress, Integer> SPEAKER_EMPTY_TICKS = new HashMap<>();
+    private static final double HANDSET_RETURN_DISTANCE_SQR = Double.MAX_VALUE;
+    private static final double SPEAKER_AUTO_HANGUP_DISTANCE_SQR = Double.MAX_VALUE;
+    private static final Map<UUID, CallSession> ACTIVE_PLAYER_CALLS = new ConcurrentHashMap<>();
+    private static final Map<HomePhoneAddress, CallSession> ACTIVE_HOME_PHONE_CALLS = new ConcurrentHashMap<>();
+    private static final Map<HomePhoneAddress, Integer> SPEAKER_EMPTY_TICKS = new ConcurrentHashMap<>();
     private static boolean initialized;
 
     private PhoneCallManager() {
@@ -464,13 +464,6 @@ public final class PhoneCallManager {
         ServerLevel level = viewer.serverLevel();
         HomePhoneBlockEntity homePhone = HomePhoneRegistry.get(level, blockPos);
         if (homePhone == null) {
-            return null;
-        }
-
-        double centerX = blockPos.getX() + 0.5D;
-        double centerY = blockPos.getY() + 0.5D;
-        double centerZ = blockPos.getZ() + 0.5D;
-        if (viewer.distanceToSqr(centerX, centerY, centerZ) > 64.0D) {
             return null;
         }
 
