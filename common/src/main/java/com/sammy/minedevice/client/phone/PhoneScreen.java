@@ -216,6 +216,7 @@ public final class PhoneScreen extends Screen {
     private boolean cameraMoveMode;
     private double lastCameraMoveMouseX;
     private double lastCameraMoveMouseY;
+    private boolean savedRawMouseMotion;
     private final InteractionHand openHand;
     private final BlockPos homePhonePos;
     private final boolean homePhoneMode;
@@ -2213,7 +2214,14 @@ public final class PhoneScreen extends Screen {
             return;
         }
 
-        if (!enabled) {
+        long windowHandle = minecraft.getWindow().getWindow();
+        if (enabled) {
+            if (GLFW.glfwRawMouseMotionSupported()) {
+                savedRawMouseMotion = GLFW.glfwGetInputMode(windowHandle, GLFW.GLFW_RAW_MOUSE_MOTION) == GLFW.GLFW_TRUE;
+                GLFW.glfwSetInputMode(windowHandle, GLFW.GLFW_RAW_MOUSE_MOTION, GLFW.GLFW_TRUE);
+            }
+            GLFW.glfwSetInputMode(windowHandle, GLFW.GLFW_CURSOR, GLFW.GLFW_CURSOR_DISABLED);
+        } else {
             minecraft.options.keyUp.setDown(false);
             minecraft.options.keyLeft.setDown(false);
             minecraft.options.keyDown.setDown(false);
@@ -2221,14 +2229,11 @@ public final class PhoneScreen extends Screen {
             minecraft.options.keyJump.setDown(false);
             minecraft.options.keySprint.setDown(false);
             minecraft.options.keyShift.setDown(false);
-        }
-
-        long windowHandle = minecraft.getWindow().getWindow();
-        GLFW.glfwSetInputMode(windowHandle, GLFW.GLFW_CURSOR,
-                enabled ? GLFW.GLFW_CURSOR_DISABLED : GLFW.GLFW_CURSOR_NORMAL);
-        if (GLFW.glfwRawMouseMotionSupported()) {
-            GLFW.glfwSetInputMode(windowHandle, GLFW.GLFW_RAW_MOUSE_MOTION,
-                    enabled ? GLFW.GLFW_TRUE : GLFW.GLFW_FALSE);
+            if (GLFW.glfwRawMouseMotionSupported()) {
+                GLFW.glfwSetInputMode(windowHandle, GLFW.GLFW_RAW_MOUSE_MOTION,
+                        savedRawMouseMotion ? GLFW.GLFW_TRUE : GLFW.GLFW_FALSE);
+            }
+            GLFW.glfwSetInputMode(windowHandle, GLFW.GLFW_CURSOR, GLFW.GLFW_CURSOR_NORMAL);
         }
     }
 
