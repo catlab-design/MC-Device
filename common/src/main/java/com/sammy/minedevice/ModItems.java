@@ -48,6 +48,9 @@ public final class ModItems {
     public static final RegistrySupplier<Item> ATM = ITEMS.register("atm",
             () -> new BlockItem(ModBlocks.ATM.get(), new Item.Properties().stacksTo(1)));
 
+    public static final RegistrySupplier<Item> BANK = ITEMS.register("bank",
+            () -> new BlockItem(ModBlocks.BANK.get(), new Item.Properties().stacksTo(1)));
+
     public static final RegistrySupplier<Item> CARD = ITEMS.register("card",
             () -> new CardItem(new Item.Properties().stacksTo(1)));
 

@@ -30,6 +30,7 @@ public final class Minedevice {
         ModBlocks.init();
         ModBlockEntities.init();
         ModItems.init();
+        ModMenus.init();
         ModCreativeTabs.init();
         PhoneNetworking.init();
         WalkieNetworking.init();

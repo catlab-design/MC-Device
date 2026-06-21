@@ -4,12 +4,10 @@ import com.sammy.minedevice.ModItems;
 import com.sammy.minedevice.atm.AtmNetworking;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LevelAccessor;
 import net.minecraft.world.level.block.Block;
@@ -76,12 +74,8 @@ public final class AtmBlock extends HorizontalDirectionalBlock {
             return InteractionResult.PASS;
         }
 
-        ItemStack stack = player.getItemInHand(hand);
-        if (!stack.is(ModItems.CARD.get())) {
-            if (level.isClientSide()) {
-                player.displayClientMessage(Component.translatable("screen.minedevice.atm.insert_card"), true);
-            }
-            return InteractionResult.sidedSuccess(level.isClientSide());
+        if (!player.getItemInHand(hand).is(ModItems.CARD.get())) {
+            return InteractionResult.PASS;
         }
 
         if (!level.isClientSide() && player instanceof ServerPlayer serverPlayer) {

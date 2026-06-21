@@ -1,12 +1,15 @@
 package com.sammy.minedevice.forge.client;
 
 import com.sammy.minedevice.ModItems;
+import com.sammy.minedevice.ModMenus;
 import com.sammy.minedevice.ModParticles;
 import com.sammy.minedevice.client.MinedeviceClient;
+import com.sammy.minedevice.client.atm.AtmScreen;
 import com.sammy.minedevice.client.particle.MegaphoneWaveParticle;
 import com.sammy.minedevice.item.CardItem;
 import com.sammy.minedevice.item.MegaphoneItem;
 import com.sammy.minedevice.item.PhoneItem;
+import net.minecraft.client.gui.screens.MenuScreens;
 import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.client.event.RegisterColorHandlersEvent;
 import net.minecraftforge.client.event.RegisterParticleProvidersEvent;
@@ -23,7 +26,10 @@ public final class MinedeviceForgeClient {
     }
 
     private static void onClientSetup(final FMLClientSetupEvent event) {
-        event.enqueueWork(MinedeviceClient::init);
+        event.enqueueWork(() -> {
+            MinedeviceClient.init();
+            MenuScreens.register(ModMenus.ATM.get(), AtmScreen::new);
+        });
     }
 
     private static void onRegisterParticleProviders(RegisterParticleProvidersEvent event) {
@@ -48,5 +54,4 @@ public final class MinedeviceForgeClient {
                 ModItems.CARD.get());
     }
 
-}
 }

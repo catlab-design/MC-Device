@@ -1,6 +1,7 @@
 package com.sammy.minedevice;
 
 import com.sammy.minedevice.block.AtmBlock;
+import com.sammy.minedevice.block.BankBlock;
 import com.sammy.minedevice.block.HomePhoneBlock;
 import dev.architectury.registry.registries.DeferredRegister;
 import dev.architectury.registry.registries.RegistrySupplier;
@@ -24,6 +25,13 @@ public final class ModBlocks {
             () -> new AtmBlock(BlockBehaviour.Properties.of()
                     .mapColor(MapColor.COLOR_GRAY)
                     .strength(1.5F)
+                    .sound(SoundType.METAL)
+                    .noOcclusion()));
+
+    public static final RegistrySupplier<Block> BANK = BLOCKS.register("bank",
+            () -> new BankBlock(BlockBehaviour.Properties.of()
+                    .mapColor(MapColor.COLOR_BLUE)
+                    .strength(2.0F)
                     .sound(SoundType.METAL)
                     .noOcclusion()));
 

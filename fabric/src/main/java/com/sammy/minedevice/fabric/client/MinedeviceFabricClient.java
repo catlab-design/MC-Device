@@ -1,8 +1,10 @@
 package com.sammy.minedevice.fabric.client;
 
 import com.sammy.minedevice.ModItems;
+import com.sammy.minedevice.ModMenus;
 import com.sammy.minedevice.ModParticles;
 import com.sammy.minedevice.client.MinedeviceClient;
+import com.sammy.minedevice.client.atm.AtmScreen;
 import com.sammy.minedevice.client.particle.MegaphoneWaveParticle;
 import com.sammy.minedevice.item.CardItem;
 import com.sammy.minedevice.item.MegaphoneItem;
@@ -10,11 +12,13 @@ import com.sammy.minedevice.item.PhoneItem;
 import net.fabricmc.fabric.api.client.rendering.v1.ColorProviderRegistry;
 import net.fabricmc.fabric.api.client.particle.v1.ParticleFactoryRegistry;
 import net.fabricmc.api.ClientModInitializer;
+import net.minecraft.client.gui.screens.MenuScreens;
 
 public final class MinedeviceFabricClient implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
         MinedeviceClient.init();
+        MenuScreens.register(ModMenus.ATM.get(), AtmScreen::new);
         ColorProviderRegistry.ITEM.register((stack, tintIndex) ->
                         tintIndex == 0 && stack.getItem() instanceof MegaphoneItem megaphoneItem
                                 ? megaphoneItem.getColor(stack)

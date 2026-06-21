@@ -217,6 +217,7 @@ public final class PhoneScreen extends Screen {
     private double lastCameraMoveMouseX;
     private double lastCameraMoveMouseY;
     private boolean savedRawMouseMotion;
+    private boolean rawMouseMotionChanged;
     private final InteractionHand openHand;
     private final BlockPos homePhonePos;
     private final boolean homePhoneMode;
@@ -2103,8 +2104,11 @@ public final class PhoneScreen extends Screen {
             return;
         }
 
-        float yaw = minecraft.player.getYRot() + (float) (dragX * 0.45F);
-        float pitch = Mth.clamp(minecraft.player.getXRot() + (float) (dragY * 0.45F), -90.0F, 90.0F);
+        double sensitivity = minecraft.options.sensitivity().get();
+        double multiplier = sensitivity * 1.5;
+
+        float yaw = minecraft.player.getYRot() + (float) (dragX * multiplier);
+        float pitch = Mth.clamp(minecraft.player.getXRot() + (float) (dragY * multiplier), -90.0F, 90.0F);
 
         minecraft.player.setYRot(yaw);
         minecraft.player.setXRot(pitch);
@@ -2216,9 +2220,10 @@ public final class PhoneScreen extends Screen {
 
         long windowHandle = minecraft.getWindow().getWindow();
         if (enabled) {
-            if (GLFW.glfwRawMouseMotionSupported()) {
+            if (GLFW.glfwRawMouseMotionSupported() && !rawMouseMotionChanged) {
                 savedRawMouseMotion = GLFW.glfwGetInputMode(windowHandle, GLFW.GLFW_RAW_MOUSE_MOTION) == GLFW.GLFW_TRUE;
                 GLFW.glfwSetInputMode(windowHandle, GLFW.GLFW_RAW_MOUSE_MOTION, GLFW.GLFW_TRUE);
+                rawMouseMotionChanged = true;
             }
             GLFW.glfwSetInputMode(windowHandle, GLFW.GLFW_CURSOR, GLFW.GLFW_CURSOR_DISABLED);
         } else {
@@ -2229,9 +2234,10 @@ public final class PhoneScreen extends Screen {
             minecraft.options.keyJump.setDown(false);
             minecraft.options.keySprint.setDown(false);
             minecraft.options.keyShift.setDown(false);
-            if (GLFW.glfwRawMouseMotionSupported()) {
+            if (rawMouseMotionChanged && GLFW.glfwRawMouseMotionSupported()) {
                 GLFW.glfwSetInputMode(windowHandle, GLFW.GLFW_RAW_MOUSE_MOTION,
                         savedRawMouseMotion ? GLFW.GLFW_TRUE : GLFW.GLFW_FALSE);
+                rawMouseMotionChanged = false;
             }
             GLFW.glfwSetInputMode(windowHandle, GLFW.GLFW_CURSOR, GLFW.GLFW_CURSOR_NORMAL);
         }

@@ -98,7 +98,6 @@ public final class MinedeviceClient {
         AirstrikeClientState.tick(minecraft);
         PhoneNetworkingClient.tick(minecraft);
         PhoneClientHooks.tickBankReceiveWorld(minecraft);
-        handleAtmOpen(minecraft);
         handleWalkieOpen(minecraft);
         handleWalkieTalkState(minecraft);
         handleAirstrikeModeCycle(minecraft);
