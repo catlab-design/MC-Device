@@ -3,6 +3,7 @@ package com.sammy.minedevice.client.phone;
 import com.mojang.blaze3d.platform.InputConstants;
 import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.math.Axis;
 import com.sammy.minedevice.Minedevice;
 import com.sammy.minedevice.ModItems;
 import com.sammy.minedevice.block.entity.HomePhoneBlockEntity;
@@ -98,6 +99,8 @@ public final class PhoneScreen extends Screen {
             "textures/gui/phone_gui/shutter_button.png");
     private static final ResourceLocation CAMFLIP_BUTTON_TEXTURE = new ResourceLocation(Minedevice.MOD_ID,
             "textures/gui/phone_gui/camflip_button.png");
+    private static final ResourceLocation ROTATE_BUTTON_TEXTURE = new ResourceLocation(Minedevice.MOD_ID,
+            "textures/gui/phone_gui/rotate_button.png");
     static final ResourceLocation DELETE_BUTTON_TEXTURE = new ResourceLocation(Minedevice.MOD_ID,
             "textures/gui/phone_gui/delete_button.png");
     static final ResourceLocation ANSWER_BUTTON_TEXTURE = new ResourceLocation(Minedevice.MOD_ID,
@@ -165,9 +168,12 @@ public final class PhoneScreen extends Screen {
     int displayWidth;
     int displayHeight;
     private boolean unlocked;
+    boolean landscapeMode;
     boolean cameraMode;
     boolean galleryMode;
     boolean photoViewerMode;
+    boolean fullScreenPhotoMode;
+    float photoZoom = 1.0F;
     boolean callAppMode;
     boolean callContactsMode;
     boolean callSessionMode;
@@ -371,6 +377,57 @@ public final class PhoneScreen extends Screen {
 
     @Override
     public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
+        if (photoViewerMode && fullScreenPhotoMode) {
+            guiGraphics.fill(0, 0, this.width, this.height, 0xFF000000);
+            List<PhotoEntry> photos = getPhotos();
+            if (!photos.isEmpty()) {
+                viewerPhotoIndex = Mth.clamp(viewerPhotoIndex, 0, photos.size() - 1);
+                PhotoEntry photoEntry = photos.get(viewerPhotoIndex);
+                boolean renderedImage = false;
+                if (photoEntry.hasFile()) {
+                    PhotoTexture photoTexture = getOrLoadPhotoTexture(photoEntry.fileName, false);
+                    if (photoTexture != null) {
+                        PhoneScreenDraw.drawTextureInArea(guiGraphics, photoTexture.textureId, photoTexture.width, photoTexture.height,
+                                0, 0, this.width, this.height, photoZoom, true);
+                        renderedImage = true;
+                    }
+                }
+                if (!renderedImage) {
+                    if (!photoEntry.itemStack.isEmpty()) {
+                        int itemX = (this.width - 16) / 2;
+                        int itemY = (this.height - 16) / 2;
+                        guiGraphics.renderItem(photoEntry.itemStack, itemX, itemY);
+                        guiGraphics.renderItemDecorations(this.font, photoEntry.itemStack, itemX, itemY);
+                    } else {
+                        Component missingText = Component.translatable("screen.minedevice.phone.viewer.missing");
+                        int missingMaxWidth = Math.max(28, this.width - 20);
+                        float missingScale = PhoneScreenDraw.textScaleToFit(this.font, missingText, missingMaxWidth);
+                        int missingWidth = PhoneScreenDraw.scaledTextWidth(this.font, missingText, missingScale);
+                        int missingHeight = PhoneScreenDraw.scaledTextHeight(this.font, missingScale);
+                        int missingX = (this.width - missingWidth) / 2;
+                        int missingY = (this.height - missingHeight) / 2;
+                        PhoneScreenDraw.drawScaledText(guiGraphics, this.font, missingText, missingX, missingY,
+                                0xFF8E8E93, false, missingScale);
+                    }
+                }
+            }
+            return;
+        }
+
+        boolean isLandscape = landscapeMode;
+        double renderMouseX = mouseX;
+        double renderMouseY = mouseY;
+        if (isLandscape) {
+            guiGraphics.pose().pushPose();
+            guiGraphics.pose().translate(frameX, frameY + Math.round(FRAME_WIDTH * scale), 0.0F);
+            guiGraphics.pose().mulPose(Axis.ZP.rotationDegrees(-90.0F));
+            guiGraphics.pose().translate(-frameX, -frameY, 0.0F);
+
+            int frameWidthPortrait = Math.round(FRAME_WIDTH * scale);
+            renderMouseX = frameX + frameY + frameWidthPortrait - mouseY;
+            renderMouseY = mouseX - frameX + frameY;
+        }
+
         boolean bankScanCameraMode = isBankScanCameraMode();
         if (cameraMode) {
             renderSurface(guiGraphics, partialTick);
@@ -406,11 +463,7 @@ public final class PhoneScreen extends Screen {
         }
         boolean hideWidgetsForCapture = cameraMode && capturePending;
         if (!hideWidgetsForCapture) {
-            super.render(guiGraphics, mouseX, mouseY, partialTick);
-        }
-
-        if (cameraMode && !bankScanCameraMode) {
-            renderCameraOverlayHints(guiGraphics);
+            super.render(guiGraphics, (int) renderMouseX, (int) renderMouseY, partialTick);
         }
 
         if (hideWidgetsForCapture) {
@@ -420,6 +473,14 @@ public final class PhoneScreen extends Screen {
         if (cameraMode && captureFlashTicks > 0) {
             renderCaptureFlash(guiGraphics);
             renderPhoneFrame(guiGraphics);
+        }
+
+        if (isLandscape) {
+            guiGraphics.pose().popPose();
+        }
+
+        if (cameraMode && !bankScanCameraMode) {
+            renderCameraOverlayHints(guiGraphics);
         }
     }
 
@@ -676,18 +737,24 @@ public final class PhoneScreen extends Screen {
         }
 
         if (photoViewerMode && keyCode == InputConstants.KEY_ESCAPE) {
+            if (fullScreenPhotoMode) {
+                fullScreenPhotoMode = false;
+                photoZoom = 1.0F;
+                rebuildWidgets();
+                return true;
+            }
             photoViewerMode = false;
             galleryMode = true;
             rebuildWidgets();
             return true;
         }
 
-        if (photoViewerMode && keyCode == InputConstants.KEY_LEFT) {
+        if (photoViewerMode && !fullScreenPhotoMode && keyCode == InputConstants.KEY_LEFT) {
             stepViewer(-1);
             return true;
         }
 
-        if (photoViewerMode && keyCode == InputConstants.KEY_RIGHT) {
+        if (photoViewerMode && !fullScreenPhotoMode && keyCode == InputConstants.KEY_RIGHT) {
             stepViewer(1);
             return true;
         }
@@ -729,6 +796,23 @@ public final class PhoneScreen extends Screen {
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        if (button == 0 && photoViewerMode && fullScreenPhotoMode) {
+            fullScreenPhotoMode = false;
+            photoZoom = 1.0F;
+            rebuildWidgets();
+            return true;
+        }
+
+        double rawMouseX = mouseX;
+        double rawMouseY = mouseY;
+        if (landscapeMode) {
+            int frameWidthPortrait = Math.round(FRAME_WIDTH * scale);
+            double rotatedMouseX = frameX + frameY + frameWidthPortrait - mouseY;
+            double rotatedMouseY = mouseX - frameX + frameY;
+            mouseX = rotatedMouseX;
+            mouseY = rotatedMouseY;
+        }
+
         if (isBankScanCameraMode()) {
             if (button == 0 && getBankScanReceiveButtonBounds().contains(mouseX, mouseY)) {
                 openBankReceivePage();
@@ -736,7 +820,7 @@ public final class PhoneScreen extends Screen {
             }
 
             if (button == 0 && getBankScanEyeButtonBounds().contains(mouseX, mouseY)) {
-                setCameraMoveMode(true, mouseX, mouseY);
+                setCameraMoveModeRotated(true, rawMouseX, rawMouseY);
                 return true;
             }
 
@@ -759,7 +843,7 @@ public final class PhoneScreen extends Screen {
         }
 
         if (cameraMode && cameraMoveMode && button == 0) {
-            setCameraMoveMode(false, mouseX, mouseY);
+            setCameraMoveModeRotated(false, rawMouseX, rawMouseY);
             return true;
         }
 
@@ -968,6 +1052,17 @@ public final class PhoneScreen extends Screen {
             return true;
         }
 
+        if (button == 0 && photoViewerMode && !fullScreenPhotoMode) {
+            ViewerLayout viewerLayout = getViewerLayout();
+            if (mouseX >= viewerLayout.areaX && mouseX <= viewerLayout.areaX + viewerLayout.areaWidth
+                    && mouseY >= viewerLayout.areaY && mouseY <= viewerLayout.areaY + viewerLayout.areaHeight) {
+                fullScreenPhotoMode = true;
+                photoZoom = 1.0F;
+                rebuildWidgets();
+                return true;
+            }
+        }
+
         if (cameraMode && cameraMoveMode && button == 0) {
             return true;
         }
@@ -982,21 +1077,35 @@ public final class PhoneScreen extends Screen {
             lastCameraMoveMouseY = mouseY;
             return true;
         }
-
+        if (landscapeMode) {
+            int frameWidthPortrait = Math.round(FRAME_WIDTH * scale);
+            double rotatedMouseX = frameX + frameY + frameWidthPortrait - mouseY;
+            double rotatedMouseY = mouseX - frameX + frameY;
+            double rotatedDragX = -dragY;
+            double rotatedDragY = dragX;
+            return super.mouseDragged(rotatedMouseX, rotatedMouseY, button, rotatedDragX, rotatedDragY);
+        }
         return super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
     }
 
     @Override
     public void mouseMoved(double mouseX, double mouseY) {
-        lastMouseX = mouseX;
-        lastMouseY = mouseY;
-        
         if (cameraMode && cameraMoveMode) {
             rotateCameraPlayer(mouseX - lastCameraMoveMouseX, mouseY - lastCameraMoveMouseY);
             lastCameraMoveMouseX = mouseX;
             lastCameraMoveMouseY = mouseY;
             return;
         }
+
+        if (landscapeMode) {
+            int frameWidthPortrait = Math.round(FRAME_WIDTH * scale);
+            double rotatedMouseX = frameX + frameY + frameWidthPortrait - mouseY;
+            double rotatedMouseY = mouseX - frameX + frameY;
+            mouseX = rotatedMouseX;
+            mouseY = rotatedMouseY;
+        }
+        lastMouseX = mouseX;
+        lastMouseY = mouseY;
 
         super.mouseMoved(mouseX, mouseY);
     }
@@ -1006,12 +1115,29 @@ public final class PhoneScreen extends Screen {
         if (cameraMode && cameraMoveMode && button == 0) {
             return true;
         }
-
+        if (landscapeMode) {
+            int frameWidthPortrait = Math.round(FRAME_WIDTH * scale);
+            double rotatedMouseX = frameX + frameY + frameWidthPortrait - mouseY;
+            double rotatedMouseY = mouseX - frameX + frameY;
+            mouseX = rotatedMouseX;
+            mouseY = rotatedMouseY;
+        }
         return super.mouseReleased(mouseX, mouseY, button);
     }
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollDelta) {
+        if (landscapeMode) {
+            int frameWidthPortrait = Math.round(FRAME_WIDTH * scale);
+            double rotatedMouseX = frameX + frameY + frameWidthPortrait - mouseY;
+            double rotatedMouseY = mouseX - frameX + frameY;
+            mouseX = rotatedMouseX;
+            mouseY = rotatedMouseY;
+        }
+        if (photoViewerMode && fullScreenPhotoMode && scrollDelta != 0.0D) {
+            photoZoom = Mth.clamp(photoZoom + (float) scrollDelta * 0.2F, 1.0F, 5.0F);
+            return true;
+        }
         if (cameraMode && scrollDelta != 0.0D) {
             if (isBankScanCameraMode()) {
                 return true;
@@ -1019,16 +1145,25 @@ public final class PhoneScreen extends Screen {
             adjustCameraZoom(scrollDelta);
             return true;
         }
-
         return super.mouseScrolled(mouseX, mouseY, scrollDelta);
     }
 
     private void updateLayout() {
-        float fitScale = Math.min((float) width / FRAME_WIDTH, (float) height / FRAME_HEIGHT);
-        scale = Math.min(FRAME_SCALE, fitScale * FRAME_SCALE);
-
-        frameWidth = Math.round(FRAME_WIDTH * scale);
-        frameHeight = Math.round(FRAME_HEIGHT * scale);
+        if (!cameraMode) {
+            landscapeMode = false;
+        }
+        float fitScale;
+        if (landscapeMode) {
+            fitScale = Math.min((float) width / FRAME_HEIGHT, (float) height / FRAME_WIDTH);
+            scale = Math.min(FRAME_SCALE, fitScale * FRAME_SCALE);
+            frameWidth = Math.round(FRAME_HEIGHT * scale);
+            frameHeight = Math.round(FRAME_WIDTH * scale);
+        } else {
+            fitScale = Math.min((float) width / FRAME_WIDTH, (float) height / FRAME_HEIGHT);
+            scale = Math.min(FRAME_SCALE, fitScale * FRAME_SCALE);
+            frameWidth = Math.round(FRAME_WIDTH * scale);
+            frameHeight = Math.round(FRAME_HEIGHT * scale);
+        }
         int baseFrameX = (width - frameWidth) / 2;
 
         int hotbarOffset = Math.round(height * 0.1F);
@@ -1163,6 +1298,9 @@ public final class PhoneScreen extends Screen {
     }
 
     private void addPhotoViewerWidgets() {
+        if (fullScreenPhotoMode) {
+            return;
+        }
         UiRect contentBounds = getMediaSurfaceBounds();
         int deleteButtonSize = Math.round(24 * scale);
         int deleteButtonX = contentBounds.right() - deleteButtonSize - Math.round(6 * scale);
@@ -1200,7 +1338,7 @@ public final class PhoneScreen extends Screen {
         addRenderableWidget(new ImageButton(
                 shutterBounds.left, shutterBounds.top, shutterBounds.width, shutterBounds.height,
                 0, 0, 0, SHUTTER_BUTTON_TEXTURE, 60, 60,
-                button -> setCameraMoveMode(true,
+                button -> setCameraMoveModeRotated(true,
                         button.getX() + (button.getWidth() / 2.0D),
                         button.getY() + (button.getHeight() / 2.0D))) {
             @Override
@@ -1210,6 +1348,7 @@ public final class PhoneScreen extends Screen {
             }
         });
 
+        addRotateButton();
         addNavigationButtons();
     }
 
@@ -2243,6 +2382,17 @@ public final class PhoneScreen extends Screen {
         }
     }
 
+    private void setCameraMoveModeRotated(boolean enabled, double mouseX, double mouseY) {
+        if (landscapeMode && enabled) {
+            int frameWidthPortrait = Math.round(FRAME_WIDTH * scale);
+            double screenX = frameX + mouseY - frameY;
+            double screenY = frameY + frameWidthPortrait - mouseX + frameX;
+            setCameraMoveMode(enabled, screenX, screenY);
+        } else {
+            setCameraMoveMode(enabled, mouseX, mouseY);
+        }
+    }
+
     private void syncCameraMovementKeys() {
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft == null) {
@@ -3189,6 +3339,8 @@ public final class PhoneScreen extends Screen {
         }
 
         photoViewerMode = true;
+        fullScreenPhotoMode = false;
+        photoZoom = 1.0F;
         closeCamera();
         galleryMode = false;
         callAppMode = false;
@@ -3332,10 +3484,26 @@ public final class PhoneScreen extends Screen {
         float scaleX = (float) sourceWidth / guiWidth;
         float scaleY = (float) sourceHeight / guiHeight;
 
-        int cropX = Mth.clamp(Math.round(cameraBounds.left * scaleX), 0, Math.max(0, sourceWidth - 1));
-        int cropY = Mth.clamp(Math.round(cameraBounds.top * scaleY), 0, Math.max(0, sourceHeight - 1));
-        int cropWidth = Mth.clamp(Math.round(cameraBounds.width * scaleX), 1, sourceWidth - cropX);
-        int cropHeight = Mth.clamp(Math.round(cameraBounds.height * scaleY), 1, sourceHeight - cropY);
+        int cropX, cropY, cropWidth, cropHeight;
+        if (landscapeMode) {
+            int frameWidthPortrait = Math.round(FRAME_WIDTH * scale);
+            int sxMin = displayY - frameY + frameX;
+            int syMin = frameX + frameY + frameWidthPortrait - displayX - displayWidth;
+            int rawCropWidth = Math.round((getCameraShutterButtonBounds().top - displayY) * scaleX);
+            int rawCropHeight = Math.round(rawCropWidth * (9.0F / 21.0F));
+            int fullCropHeight = Math.round(displayWidth * scaleY);
+            int yOffset = (fullCropHeight - rawCropHeight) / 2;
+
+            cropX = Mth.clamp(Math.round(sxMin * scaleX), 0, Math.max(0, sourceWidth - 1));
+            cropY = Mth.clamp(Math.round(syMin * scaleY) + yOffset, 0, Math.max(0, sourceHeight - 1));
+            cropWidth = Mth.clamp(rawCropWidth, 1, sourceWidth - cropX);
+            cropHeight = Mth.clamp(rawCropHeight, 1, sourceHeight - cropY);
+        } else {
+            cropX = Mth.clamp(Math.round(cameraBounds.left * scaleX), 0, Math.max(0, sourceWidth - 1));
+            cropY = Mth.clamp(Math.round(cameraBounds.top * scaleY), 0, Math.max(0, sourceHeight - 1));
+            cropWidth = Mth.clamp(Math.round(cameraBounds.width * scaleX), 1, sourceWidth - cropX);
+            cropHeight = Mth.clamp(Math.round(cameraBounds.height * scaleY), 1, sourceHeight - cropY);
+        }
 
         return cropImage(source, cropX, cropY, cropWidth, cropHeight);
     }
@@ -3750,6 +3918,27 @@ public final class PhoneScreen extends Screen {
 
     Font getScreenFont() {
         return font;
+    }
+
+    private void addRotateButton() {
+        int buttonSize = Math.round(24 * scale);
+        int buttonX = frameX + Math.round(FRAME_WIDTH * scale) + Math.round(4 * scale);
+        int buttonY = frameY + Math.round(FRAME_HEIGHT * scale) - buttonSize - Math.round(4 * scale);
+        addRenderableWidget(new ImageButton(
+                buttonX, buttonY, buttonSize, buttonSize,
+                0, 0, 0, ROTATE_BUTTON_TEXTURE, 24, 24,
+                button -> toggleLandscapeMode()) {
+            @Override
+            public void renderWidget(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
+                guiGraphics.blit(this.resourceLocation, this.getX(), this.getY(), this.width, this.height,
+                        0.0F, 0.0F, 24, 24, 24, 24);
+            }
+        });
+    }
+
+    private void toggleLandscapeMode() {
+        landscapeMode = !landscapeMode;
+        rebuildWidgets();
     }
 
 }

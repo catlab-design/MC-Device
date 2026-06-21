@@ -101,9 +101,8 @@ final class PhoneMediaSurfaceRenderer {
             if (photoEntry.hasFile()) {
                 PhotoTexture photoTexture = screen.getOrLoadPhotoTexture(photoEntry.fileName, true);
                 if (photoTexture != null) {
-                    guiGraphics.blit(photoTexture.textureId, cardX, cardY, slotBounds.width, slotBounds.height,
-                            0.0F, 0.0F, photoTexture.width, photoTexture.height,
-                            photoTexture.width, photoTexture.height);
+                    PhoneScreenDraw.drawTextureInArea(guiGraphics, photoTexture.textureId, photoTexture.width, photoTexture.height,
+                            cardX, cardY, slotBounds.width, slotBounds.height, 1.0F, false);
                     renderedImage = true;
                 }
             }
@@ -160,7 +159,7 @@ final class PhoneMediaSurfaceRenderer {
         PhoneScreenDraw.drawScaledText(guiGraphics, minecraft.font, pageText, titleX, titleY, 0xFF000000, false, titleScale);
 
         guiGraphics.fill(viewerLayout.areaX, viewerLayout.areaY,
-                viewerLayout.areaX + viewerLayout.areaWidth, viewerLayout.areaY + viewerLayout.areaHeight, 0xFFE5E5EA);
+                viewerLayout.areaX + viewerLayout.areaWidth, viewerLayout.areaY + viewerLayout.areaHeight, 0xFF000000);
 
         boolean renderedImage = false;
         if (photoEntry.hasFile()) {
@@ -212,10 +211,22 @@ final class PhoneMediaSurfaceRenderer {
             if (previewTexture != null) {
                 guiGraphics.fill(previewBounds.left, previewBounds.top,
                         previewBounds.right(), previewBounds.bottom(), 0xFFE7EBF2);
+                boolean rotatePreview = screen.landscapeMode;
+                if (rotatePreview) {
+                    guiGraphics.pose().pushPose();
+                    float centerX = (previewBounds.left + previewBounds.right()) / 2.0F;
+                    float centerY = (previewBounds.top + previewBounds.bottom()) / 2.0F;
+                    guiGraphics.pose().translate(centerX, centerY, 0.0F);
+                    guiGraphics.pose().mulPose(com.mojang.math.Axis.ZP.rotationDegrees(90.0F));
+                    guiGraphics.pose().translate(-centerX, -centerY, 0.0F);
+                }
                 guiGraphics.blit(previewTexture.textureId, previewBounds.left + 1, previewBounds.top + 1,
                         previewBounds.width - 2, previewBounds.height - 2,
                         0.0F, 0.0F, previewTexture.width, previewTexture.height,
                         previewTexture.width, previewTexture.height);
+                if (rotatePreview) {
+                    guiGraphics.pose().popPose();
+                }
                 renderedPreview = true;
             }
         }
@@ -280,6 +291,16 @@ final class PhoneMediaSurfaceRenderer {
                 : (float) (screen.getCameraZoomLevel() - minZoomLevel) / (float) (maxZoomLevel - minZoomLevel);
         int fillWidth = Math.max(barHeight, Math.round(barWidth * Mth.clamp(zoomProgress, 0.0F, 1.0F)));
 
+        boolean rotateIndicator = screen.landscapeMode;
+        if (rotateIndicator) {
+            guiGraphics.pose().pushPose();
+            float centerX = indicatorX + indicatorWidth / 2.0F;
+            float centerY = indicatorY + indicatorHeight / 2.0F;
+            guiGraphics.pose().translate(centerX, centerY, 0.0F);
+            guiGraphics.pose().mulPose(com.mojang.math.Axis.ZP.rotationDegrees(90.0F));
+            guiGraphics.pose().translate(-centerX, -centerY, 0.0F);
+        }
+
         guiGraphics.fill(indicatorX, indicatorY, indicatorX + indicatorWidth, indicatorY + indicatorHeight, 0x99000000);
         guiGraphics.fill(indicatorX + barInset, barY, indicatorX + barInset + barWidth, barY + barHeight, 0x33FFFFFF);
         guiGraphics.fill(indicatorX + barInset, barY, indicatorX + barInset + fillWidth, barY + barHeight, 0xFFE7EBF2);
@@ -287,6 +308,10 @@ final class PhoneMediaSurfaceRenderer {
         int textX = indicatorX + (indicatorWidth - textWidth) / 2;
         int textY = indicatorY + indicatorPaddingY;
         PhoneScreenDraw.drawScaledText(guiGraphics, minecraft.font, zoomText, textX, textY, 0xFFFFFFFF, true, textScale);
+
+        if (rotateIndicator) {
+            guiGraphics.pose().popPose();
+        }
     }
 
     static void renderCameraOverlayHints(PhoneScreen screen, GuiGraphics guiGraphics) {

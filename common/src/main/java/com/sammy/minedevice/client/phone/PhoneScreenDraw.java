@@ -38,16 +38,23 @@ final class PhoneScreenDraw {
     static void drawPhotoInArea(GuiGraphics guiGraphics, PhotoTexture photoTexture,
                                 int areaX, int areaY, int areaWidth, int areaHeight) {
         drawTextureInArea(guiGraphics, photoTexture.textureId, photoTexture.width, photoTexture.height,
-                areaX, areaY, areaWidth, areaHeight, 1.03F);
+                areaX, areaY, areaWidth, areaHeight, 1.03F, true);
     }
 
     static void drawTextureInArea(GuiGraphics guiGraphics, ResourceLocation textureId, int textureWidth, int textureHeight,
                                   int areaX, int areaY, int areaWidth, int areaHeight, float zoomMultiplier) {
+        drawTextureInArea(guiGraphics, textureId, textureWidth, textureHeight, areaX, areaY, areaWidth, areaHeight, zoomMultiplier, true);
+    }
+
+    static void drawTextureInArea(GuiGraphics guiGraphics, ResourceLocation textureId, int textureWidth, int textureHeight,
+                                  int areaX, int areaY, int areaWidth, int areaHeight, float zoomMultiplier, boolean fit) {
         if (textureWidth <= 0 || textureHeight <= 0) {
             return;
         }
 
-        float scaleFactor = Math.max((float) areaWidth / textureWidth, (float) areaHeight / textureHeight);
+        float scaleFactor = fit
+                ? Math.min((float) areaWidth / textureWidth, (float) areaHeight / textureHeight)
+                : Math.max((float) areaWidth / textureWidth, (float) areaHeight / textureHeight);
         scaleFactor *= zoomMultiplier;
         int drawWidth = Math.max(1, Math.round(textureWidth * scaleFactor));
         int drawHeight = Math.max(1, Math.round(textureHeight * scaleFactor));

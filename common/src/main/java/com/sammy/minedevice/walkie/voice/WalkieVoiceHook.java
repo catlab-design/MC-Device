@@ -170,6 +170,25 @@ public final class WalkieVoiceHook {
         WalkieBridge bridge;
         synchronized (ACTIVE_BRIDGES) {
             bridge = ACTIVE_BRIDGES.get(sourcePlayerId);
+            if ((bridge == null || bridge.closed) && sourceLine != null) {
+                InteractionHand hand = TALKING_HANDS.get(sourcePlayerId);
+                if (hand != null) {
+                    try {
+                        Object instance = sourcePlayer.getInstance();
+                        if (instance instanceof ServerPlayer serverPlayer) {
+                            ItemStack stack = serverPlayer.getItemInHand(hand);
+                            if (stack.getItem() instanceof WalkieRadioItem) {
+                                bridge = WalkieBridge.create(serverPlayer, stack);
+                                if (bridge != null) {
+                                    ACTIVE_BRIDGES.put(sourcePlayerId, bridge);
+                                }
+                            }
+                        }
+                    } catch (Throwable throwable) {
+                        Minedevice.LOGGER.debug("Unable to create walkie bridge from audio packet", throwable);
+                    }
+                }
+            }
         }
 
         if (bridge == null || bridge.closed) {

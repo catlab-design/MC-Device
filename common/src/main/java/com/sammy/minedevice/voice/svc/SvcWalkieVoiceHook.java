@@ -38,6 +38,7 @@ public final class SvcWalkieVoiceHook {
 
     private static VoicechatServerApi serverApi;
     private static boolean tickRegistered;
+    private static MinecraftServer minecraftServer;
 
     private SvcWalkieVoiceHook() {
     }
@@ -82,6 +83,25 @@ public final class SvcWalkieVoiceHook {
         WalkieBridge bridge;
         synchronized (ACTIVE_BRIDGES) {
             bridge = ACTIVE_BRIDGES.get(senderId);
+            if ((bridge == null || bridge.closed) && serverApi != null && minecraftServer != null) {
+                InteractionHand hand = TALKING_HANDS.get(senderId);
+                if (hand != null) {
+                    try {
+                        ServerPlayer serverPlayer = minecraftServer.getPlayerList().getPlayer(senderId);
+                        if (serverPlayer != null) {
+                            ItemStack stack = serverPlayer.getItemInHand(hand);
+                            if (stack.getItem() instanceof WalkieRadioItem) {
+                                bridge = WalkieBridge.create(minecraftServer, serverPlayer, stack);
+                                if (bridge != null) {
+                                    ACTIVE_BRIDGES.put(senderId, bridge);
+                                }
+                            }
+                        }
+                    } catch (Throwable throwable) {
+                        Minedevice.LOGGER.debug("Unable to create SVC walkie bridge from audio packet", throwable);
+                    }
+                }
+            }
         }
 
         if (bridge == null || bridge.closed) {
@@ -93,6 +113,7 @@ public final class SvcWalkieVoiceHook {
     }
 
     private static void onServerTick(MinecraftServer server) {
+        minecraftServer = server;
         if (serverApi == null) {
             clearAllBridges();
             return;

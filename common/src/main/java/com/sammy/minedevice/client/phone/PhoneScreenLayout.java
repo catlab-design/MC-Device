@@ -312,12 +312,14 @@ final class PhoneScreenLayout {
     UiRect cameraPreviewBounds() {
         int previewSize = Math.max(20, Math.round(30 * scale));
         int previewX = displayX + Math.max(6, Math.round(8 * scale));
-        int previewY = displayY + displayHeight - previewSize - Math.max(20, Math.round(24 * scale));
+        UiRect shutterBounds = cameraShutterButtonBounds();
+        int shutterCenterY = shutterBounds.top + shutterBounds.height / 2;
+        int previewY = shutterCenterY - previewSize / 2;
         return new UiRect(previewX, previewY, previewSize, previewSize);
     }
 
     UiRect cameraShutterButtonBounds() {
-        int shutterSize = Math.round(52 * scale);
+        int shutterSize = Math.round(42 * scale);
         int shutterX = displayX + (displayWidth - shutterSize) / 2;
         int shutterY = displayY + displayHeight - shutterSize - Math.round(18 * scale);
         return new UiRect(shutterX, shutterY, shutterSize, shutterSize);
