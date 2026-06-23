@@ -172,6 +172,11 @@ public final class PhoneScreen extends Screen {
     boolean callAppMode;
     boolean callContactsMode;
     boolean callSessionMode;
+    boolean addContactMode;
+    String addContactName = "";
+    String addContactNumber = "";
+    boolean addContactNameFieldFocused = true;
+    String editingContactOriginalNumber = null;
     boolean chatAppMode;
     boolean chatThreadMode;
     boolean bankAppMode;
@@ -207,6 +212,8 @@ public final class PhoneScreen extends Screen {
     boolean activeCallConnected;
     boolean activeCallMissed;
     int activeCallTicks;
+    boolean callMuted;
+    boolean callSpeakerEnabled;
     private long observedCallStateRevision = Long.MIN_VALUE;
     private boolean selfieCameraMode;
     private CameraType savedCameraType;
@@ -287,6 +294,8 @@ public final class PhoneScreen extends Screen {
         callAppMode = false;
         callContactsMode = false;
         callSessionMode = false;
+        
+        addContactMode = false;
         chatAppMode = false;
         chatThreadMode = false;
         bankAppMode = false;
@@ -362,6 +371,8 @@ public final class PhoneScreen extends Screen {
             addGalleryWidgets();
         } else if (settingsAppMode) {
             addSettingsWidgets();
+        } else if (addContactMode) {
+            // no widgets for add contact page
         } else if (unlocked) {
             addHomeWidgets();
         } else {
@@ -379,7 +390,7 @@ public final class PhoneScreen extends Screen {
             }
             renderPhoneFrame(guiGraphics);
         } else {
-            if (callSessionMode || callAppMode || callContactsMode || chatAppMode || chatThreadMode || bankAppMode) {
+            if (callSessionMode || callAppMode || callContactsMode || addContactMode || chatAppMode || chatThreadMode || bankAppMode) {
                 renderCallBackdrop(guiGraphics);
             } else if (galleryMode || photoViewerMode) {
                 renderMediaBackdrop(guiGraphics);
@@ -455,6 +466,7 @@ public final class PhoneScreen extends Screen {
         applyCallStateFromServer();
         if (isCallScreenLocked()
                 && (cameraMode || galleryMode || photoViewerMode || callAppMode || callContactsMode
+                || addContactMode
                 || chatAppMode || chatThreadMode || bankAppMode || !callSessionMode)) {
             setBankReceiveActive(false);
             closeCamera();
@@ -463,6 +475,8 @@ public final class PhoneScreen extends Screen {
             photoViewerMode = false;
             callAppMode = false;
             callContactsMode = false;
+            
+            addContactMode = false;
             chatAppMode = false;
             chatThreadMode = false;
             bankAppMode = false;
@@ -566,6 +580,15 @@ public final class PhoneScreen extends Screen {
             return true;
         }
 
+        if (addContactMode && keyCode == InputConstants.KEY_ESCAPE) {
+            editingContactOriginalNumber = null;
+            addContactName = "";
+            addContactNumber = "";
+            addContactNameFieldFocused = true;
+            openCallContactsPage();
+            return true;
+        }
+
         if (chatThreadMode && keyCode == InputConstants.KEY_ESCAPE) {
             openChatApp();
             return true;
@@ -614,6 +637,17 @@ public final class PhoneScreen extends Screen {
 
             if ((keyCode == InputConstants.KEY_RETURN || keyCode == InputConstants.KEY_NUMPADENTER) && !dialedNumber.isEmpty()) {
                 startCallSession(dialedNumber);
+                return true;
+            }
+        }
+
+        if (addContactMode && keyCode == InputConstants.KEY_BACKSPACE) {
+            if (addContactNameFieldFocused && !addContactName.isEmpty()) {
+                addContactName = addContactName.substring(0, addContactName.length() - 1);
+                return true;
+            }
+            if (!addContactNameFieldFocused && !addContactNumber.isEmpty()) {
+                addContactNumber = addContactNumber.substring(0, addContactNumber.length() - 1);
                 return true;
             }
         }
@@ -730,6 +764,18 @@ public final class PhoneScreen extends Screen {
             return true;
         }
 
+        if (addContactMode) {
+            if (addContactNameFieldFocused && isAcceptedChatCharacter(codePoint) && addContactName.length() < PhoneData.MAX_CONTACT_NAME_LENGTH) {
+                addContactName = addContactName + codePoint;
+                return true;
+            }
+            if (!addContactNameFieldFocused && Character.isDigit(codePoint) && addContactNumber.length() < PhoneData.PHONE_NUMBER_LENGTH) {
+                addContactNumber = addContactNumber + codePoint;
+                return true;
+            }
+            return false;
+        }
+
         return super.charTyped(codePoint, modifiers);
     }
 
@@ -785,8 +831,37 @@ public final class PhoneScreen extends Screen {
                 return true;
             }
 
-            if (getCallHangupButtonBounds().contains(mouseX, mouseY)) {
+            if (activeCallIncoming && !activeCallConnected) {
+                UiRect connectBounds = getCallConnectButtonBounds();
+                int gap = Math.max(5, Math.round(6 * scale));
+                UiRect incomingHangupBounds = new UiRect(connectBounds.right() + gap, connectBounds.top,
+                        connectBounds.width, connectBounds.height);
+                if (incomingHangupBounds.contains(mouseX, mouseY)) {
+                    endCallSession(true);
+                    return true;
+                }
+            } else if (getCallHangupButtonBounds().contains(mouseX, mouseY)) {
                 endCallSession(true);
+                return true;
+            }
+
+            if (getCallMuteButtonBounds().contains(mouseX, mouseY)) {
+                callMuted = !callMuted;
+                if (homePhoneMode) {
+                    PhoneNetworkingClient.requestToggleMute(homePhonePos);
+                } else {
+                    PhoneNetworkingClient.requestToggleMute();
+                }
+                return true;
+            }
+
+            if (getCallSpeakerButtonBounds().contains(mouseX, mouseY)) {
+                callSpeakerEnabled = !callSpeakerEnabled;
+                if (homePhoneMode) {
+                    PhoneNetworkingClient.requestToggleSpeaker(homePhonePos);
+                } else {
+                    PhoneNetworkingClient.requestToggleSpeaker();
+                }
                 return true;
             }
         }
@@ -818,7 +893,7 @@ public final class PhoneScreen extends Screen {
             }
         }
 
-        if (button == 0 && callContactsMode) {
+        if (button == 0 && callContactsMode && !addContactMode) {
             if (getCallDialMenuBounds().contains(mouseX, mouseY)) {
                 openCallDialPage();
                 return true;
@@ -841,6 +916,8 @@ public final class PhoneScreen extends Screen {
                 PhoneContact contact = contacts.get(contactIndex);
                 if (getContactDeleteButtonBounds(contactIndex, contacts.size()).contains(mouseX, mouseY)) {
                     requestDeleteContact(contact.number());
+                } else if (getContactEditButtonBounds(contactIndex, contacts.size()).contains(mouseX, mouseY)) {
+                    openEditContactPage(contact);
                 } else {
                     startCallSession(contact.number());
                 }
@@ -967,6 +1044,50 @@ public final class PhoneScreen extends Screen {
         // Settings app clicks
         if (button == 0 && settingsAppMode) {
             return PhoneSettingsSurfaceRenderer.handleClick(this, mouseX, mouseY);
+        }
+
+        if (button == 0 && addContactMode) {
+            if (getAddContactSaveButtonBounds().contains(mouseX, mouseY)) {
+                if (!addContactNumber.isEmpty()) {
+                    if (editingContactOriginalNumber != null && !editingContactOriginalNumber.equals(addContactNumber)) {
+                        requestDeleteContact(editingContactOriginalNumber);
+                    }
+                    String displayName = addContactName.isBlank() ? addContactNumber : addContactName;
+                    requestSaveContact(addContactNumber, displayName);
+                    editingContactOriginalNumber = null;
+                    addContactName = "";
+                    addContactNumber = "";
+                    addContactNameFieldFocused = true;
+                    openCallContactsPage();
+                }
+                return true;
+            }
+
+            if (getAddContactCancelButtonBounds().contains(mouseX, mouseY)) {
+                editingContactOriginalNumber = null;
+                addContactName = "";
+                addContactNumber = "";
+                addContactNameFieldFocused = true;
+                openCallContactsPage();
+                return true;
+            }
+
+            if (getAddContactNameBounds().contains(mouseX, mouseY)) {
+                addContactNameFieldFocused = true;
+                return true;
+            }
+
+            if (getAddContactNumberBounds().contains(mouseX, mouseY)) {
+                addContactNameFieldFocused = false;
+                return true;
+            }
+        }
+
+        if (button == 0 && callContactsMode && !addContactMode) {
+            if (getAddContactHeaderButtonBounds().contains(mouseX, mouseY)) {
+                openAddContactPage();
+                return true;
+            }
         }
 
         boolean handled = super.mouseClicked(mouseX, mouseY, button);
@@ -1424,6 +1545,9 @@ public final class PhoneScreen extends Screen {
 
         if (callContactsMode) {
             renderCallContactsSurface(guiGraphics);
+            if (addContactMode) {
+                renderAddContactSurface(guiGraphics);
+            }
             return;
         }
 
@@ -1499,6 +1623,10 @@ public final class PhoneScreen extends Screen {
 
     private void renderCallSessionSurface(GuiGraphics guiGraphics) {
         PhoneCallSurfaceRenderer.renderCallSessionSurface(this, guiGraphics);
+    }
+
+    private void renderAddContactSurface(GuiGraphics guiGraphics) {
+        PhoneCallSurfaceRenderer.renderAddContactSurface(this, guiGraphics);
     }
 
     private void renderChatAppSurface(GuiGraphics guiGraphics) {
@@ -1604,6 +1732,30 @@ public final class PhoneScreen extends Screen {
         return getLayoutState().callListMenuBounds();
     }
 
+    UiRect getAddContactHeaderButtonBounds() {
+        return getLayoutState().addContactHeaderButtonBounds();
+    }
+
+    UiRect getAddContactPopupBounds() {
+        return getLayoutState().addContactPopupBounds();
+    }
+
+    UiRect getAddContactNameBounds() {
+        return getLayoutState().addContactNameBounds();
+    }
+
+    UiRect getAddContactNumberBounds() {
+        return getLayoutState().addContactNumberBounds();
+    }
+
+    UiRect getAddContactSaveButtonBounds() {
+        return getLayoutState().addContactSaveButtonBounds();
+    }
+
+    UiRect getAddContactCancelButtonBounds() {
+        return getLayoutState().addContactCancelButtonBounds();
+    }
+
     UiRect getCallNumberDisplayBounds() {
         return getLayoutState().callNumberDisplayBounds();
     }
@@ -1664,6 +1816,12 @@ public final class PhoneScreen extends Screen {
         return getLayoutState().contactDeleteButtonBounds(index, contactCount, canSaveNumber);
     }
 
+    UiRect getContactEditButtonBounds(int index, int contactCount) {
+        String saveCandidateNumber = getContactSaveCandidateNumber();
+        boolean canSaveNumber = !saveCandidateNumber.isEmpty() && !hasSavedContact(saveCandidateNumber);
+        return getLayoutState().contactEditButtonBounds(index, contactCount, canSaveNumber);
+    }
+
     private int getContactIndexAt(double mouseX, double mouseY, List<PhoneContact> contacts) {
         String saveCandidateNumber = getContactSaveCandidateNumber();
         boolean canSaveNumber = !saveCandidateNumber.isEmpty() && !hasSavedContact(saveCandidateNumber);
@@ -1685,6 +1843,14 @@ public final class PhoneScreen extends Screen {
             );
         }
         return getLayoutState().callHangupButtonBounds();
+    }
+
+    UiRect getCallMuteButtonBounds() {
+        return getLayoutState().callMuteButtonBounds();
+    }
+
+    UiRect getCallSpeakerButtonBounds() {
+        return getLayoutState().callSpeakerButtonBounds();
     }
 
     UiRect getChatHeaderBounds() {
@@ -2161,6 +2327,8 @@ public final class PhoneScreen extends Screen {
             if (callSessionMode) {
                 callSessionMode = false;
                 callContactsMode = false;
+                
+                addContactMode = false;
                 callAppMode = true;
                 shouldRebuild = true;
             }
@@ -2195,6 +2363,8 @@ public final class PhoneScreen extends Screen {
             if (!cameraMode && !galleryMode && !photoViewerMode) {
                 callAppMode = false;
                 callContactsMode = false;
+                
+                addContactMode = false;
                 callSessionMode = true;
                 shouldRebuild = true;
             } else if (stateChanged) {
@@ -2310,6 +2480,8 @@ public final class PhoneScreen extends Screen {
         unlocked = true;
         callAppMode = true;
         callContactsMode = false;
+        
+        addContactMode = false;
         callSessionMode = false;
         chatAppMode = false;
         chatThreadMode = false;
@@ -2330,6 +2502,8 @@ public final class PhoneScreen extends Screen {
         }
         callAppMode = false;
         callContactsMode = false;
+        
+        addContactMode = false;
         callSessionMode = false;
         unlocked = true;
         rebuildWidgets();
@@ -2343,6 +2517,8 @@ public final class PhoneScreen extends Screen {
         unlocked = true;
         callAppMode = false;
         callContactsMode = false;
+        
+        addContactMode = false;
         callSessionMode = false;
         chatAppMode = true;
         chatThreadMode = false;
@@ -2373,9 +2549,10 @@ public final class PhoneScreen extends Screen {
         unlocked = true;
         callAppMode = false;
         callContactsMode = false;
+        
+        addContactMode = false;
         callSessionMode = false;
         chatAppMode = false;
-        chatThreadMode = false;
         bankAppMode = true;
         bankPage = BANK_PAGE_HOME;
         bankTransferNumber = "";
@@ -2445,6 +2622,8 @@ public final class PhoneScreen extends Screen {
         photoViewerMode = false;
         callAppMode = false;
         callContactsMode = false;
+        
+        addContactMode = false;
         callSessionMode = false;
         chatAppMode = false;
         chatThreadMode = false;
@@ -2535,17 +2714,64 @@ public final class PhoneScreen extends Screen {
         rebuildWidgets();
     }
 
+    private void openAddContactPage() {
+        setBankReceiveActive(false);
+        if (isCallScreenLocked()) {
+            callAppMode = false;
+            
+            addContactMode = false;
+            callSessionMode = true;
+            rebuildWidgets();
+            return;
+        }
+        callAppMode = false;
+        
+        addContactMode = true;
+        callSessionMode = false;
+        chatAppMode = false;
+        chatThreadMode = false;
+        bankAppMode = false;
+        observedCallStateRevision = Long.MIN_VALUE;
+        requestCallSync();
+        applyCallStateFromServer();
+        addContactName = "";
+        addContactNumber = "";
+        addContactNameFieldFocused = true;
+        editingContactOriginalNumber = null;
+        rebuildWidgets();
+    }
+
+    private void openEditContactPage(PhoneContact contact) {
+        setBankReceiveActive(false);
+        addContactMode = true;
+        callAppMode = false;
+        
+        callSessionMode = false;
+        chatAppMode = false;
+        chatThreadMode = false;
+        bankAppMode = false;
+        addContactName = contact.displayName();
+        addContactNumber = contact.number();
+        addContactNameFieldFocused = true;
+        editingContactOriginalNumber = contact.number();
+        rebuildWidgets();
+    }
+
     private void openCallContactsPage() {
         setBankReceiveActive(false);
         if (isCallScreenLocked()) {
             callAppMode = false;
             callContactsMode = false;
+            
+            addContactMode = false;
             callSessionMode = true;
             rebuildWidgets();
             return;
         }
         callAppMode = false;
         callContactsMode = true;
+        
+        addContactMode = false;
         callSessionMode = false;
         chatAppMode = false;
         chatThreadMode = false;
@@ -2561,12 +2787,18 @@ public final class PhoneScreen extends Screen {
         if (isCallScreenLocked()) {
             callAppMode = false;
             callContactsMode = false;
+            
+            addContactMode = false;
+            editingContactOriginalNumber = null;
             callSessionMode = true;
             rebuildWidgets();
             return;
         }
         callAppMode = true;
         callContactsMode = false;
+        
+        addContactMode = false;
+        editingContactOriginalNumber = null;
         callSessionMode = false;
         chatAppMode = false;
         chatThreadMode = false;
@@ -2593,6 +2825,8 @@ public final class PhoneScreen extends Screen {
         activeCallTicks = 0;
         callAppMode = false;
         callContactsMode = false;
+        
+        addContactMode = false;
         callSessionMode = true;
         chatAppMode = false;
         chatThreadMode = false;
@@ -2634,7 +2868,11 @@ public final class PhoneScreen extends Screen {
         activeCallConnected = false;
         activeCallMissed = false;
         activeCallTicks = 0;
+        callMuted = false;
+        callSpeakerEnabled = false;
         callContactsMode = false;
+        
+        addContactMode = false;
         callAppMode = returnToList;
         if (!returnToList) {
             unlocked = true;
@@ -3045,6 +3283,8 @@ public final class PhoneScreen extends Screen {
         closeCamera();
         callAppMode = false;
         callContactsMode = false;
+        
+        addContactMode = false;
         callSessionMode = false;
         chatAppMode = false;
         chatThreadMode = false;
@@ -3062,6 +3302,8 @@ public final class PhoneScreen extends Screen {
         photoViewerMode = false;
         callAppMode = false;
         callContactsMode = false;
+        
+        addContactMode = false;
         callSessionMode = false;
         chatAppMode = false;
         chatThreadMode = false;
@@ -3214,6 +3456,8 @@ public final class PhoneScreen extends Screen {
         galleryMode = false;
         callAppMode = false;
         callContactsMode = false;
+        
+        addContactMode = false;
         callSessionMode = false;
         chatAppMode = false;
         chatThreadMode = false;
@@ -3356,7 +3600,7 @@ public final class PhoneScreen extends Screen {
         int cropX = Mth.clamp(Math.round(cameraBounds.left * scaleX), 0, Math.max(0, sourceWidth - 1));
         int cropY = Mth.clamp(Math.round(cameraBounds.top * scaleY), 0, Math.max(0, sourceHeight - 1));
         int cropWidth = Mth.clamp(Math.round(cameraBounds.width * scaleX), 1, sourceWidth - cropX);
-        int cropHeight = Mth.clamp(Math.round(cameraBounds.height * scaleY), 1, sourceHeight - cropY);
+        int cropHeight = Mth.clamp(Math.round((getCameraShutterButtonBounds().top - displayY) * scaleY), 1, sourceHeight - cropY);
 
         return cropImage(source, cropX, cropY, cropWidth, cropHeight);
     }

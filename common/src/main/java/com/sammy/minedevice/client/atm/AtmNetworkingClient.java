@@ -84,4 +84,16 @@ public final class AtmNetworkingClient {
         buf.writeBlockPos(atmPos);
         NetworkManager.sendToServer(AtmNetworking.WITHDRAW_ALL, buf);
     }
+
+    public static void requestTransfer(BlockPos atmPos, String recipientName, long amount) {
+        if (atmPos == null || recipientName == null || recipientName.isEmpty() || amount <= 0L) {
+            return;
+        }
+
+        RegistryFriendlyByteBuf buf = NetworkBufferUtils.create();
+        buf.writeBlockPos(atmPos);
+        buf.writeUtf(recipientName);
+        buf.writeLong(amount);
+        NetworkManager.sendToServer(AtmNetworking.TRANSFER, buf);
+    }
 }

@@ -232,6 +232,39 @@ public final class PhoneCallManager {
         return putDownHomePhoneHandset(viewer, new HomePhoneAddress(dimension, blockPos.immutable()));
     }
 
+    public static void toggleMute(ServerPlayer player) {
+        CallSession session = ACTIVE_PLAYER_CALLS.get(player.getUUID());
+        if (session == null || session.state != PhoneCallState.CONNECTED) {
+            return;
+        }
+        session.muted = !session.muted;
+        syncMuteSpeaker(session);
+    }
+
+    public static void toggleSpeaker(ServerPlayer player) {
+        CallSession session = ACTIVE_PLAYER_CALLS.get(player.getUUID());
+        if (session == null || session.state != PhoneCallState.CONNECTED) {
+            return;
+        }
+        session.speakerEnabled = !session.speakerEnabled;
+        syncMuteSpeaker(session);
+    }
+
+    public static void toggleHomePhoneMute(ServerPlayer viewer, BlockPos blockPos) {
+        HomePhoneEndpoint endpoint = resolveHomePhoneEndpoint(viewer, blockPos);
+        if (endpoint == null) {
+            PhoneNetworking.sendHomePhoneCallState(viewer, blockPos, PhoneCallState.IDLE, "", "");
+            return;
+        }
+
+        CallSession session = ACTIVE_HOME_PHONE_CALLS.get(endpoint.address());
+        if (session == null || session.state != PhoneCallState.CONNECTED) {
+            return;
+        }
+        session.muted = !session.muted;
+        syncMuteSpeaker(session);
+    }
+
     public static void toggleHomePhoneSpeaker(ServerPlayer viewer, BlockPos blockPos) {
         HomePhoneEndpoint endpoint = resolveHomePhoneEndpoint(viewer, blockPos);
         if (endpoint == null) {
@@ -518,6 +551,24 @@ public final class PhoneCallManager {
             ServerPlayer callee = getPlayer(session.server, calleeEndpoint.playerId());
             if (callee != null) {
                 syncPlayerEndpoint(callee, calleeEndpoint, session);
+            }
+        }
+    }
+
+    private static void syncMuteSpeaker(CallSession session) {
+        if (session == null) {
+            return;
+        }
+        if (session.caller instanceof PlayerEndpoint callerEndpoint) {
+            ServerPlayer caller = getPlayer(session.server, callerEndpoint.playerId());
+            if (caller != null) {
+                PhoneNetworking.sendMuteSpeakerSync(caller, null, session.muted, session.speakerEnabled);
+            }
+        }
+        if (session.callee instanceof PlayerEndpoint calleeEndpoint) {
+            ServerPlayer callee = getPlayer(session.server, calleeEndpoint.playerId());
+            if (callee != null) {
+                PhoneNetworking.sendMuteSpeakerSync(callee, null, session.muted, session.speakerEnabled);
             }
         }
     }
@@ -1162,6 +1213,8 @@ public final class PhoneCallManager {
         private final String calleeName;
         private PhoneCallState state;
         private long startTime;
+        boolean muted;
+        boolean speakerEnabled;
 
         private CallSession(MinecraftServer server, UUID initiatorPlayerId, Endpoint caller, Endpoint callee,
                             String callerNumber, String calleeNumber, String callerName,

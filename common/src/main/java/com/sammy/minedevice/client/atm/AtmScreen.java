@@ -3,6 +3,7 @@ package com.sammy.minedevice.client.atm;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractWidget;
+import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.core.BlockPos;
@@ -30,8 +31,16 @@ public final class AtmScreen extends Screen {
     private static final int COLOR_BUTTON_TEXT = 0xFFFFFFFF;
     private static final NumberFormat NUMBER_FORMAT = NumberFormat.getIntegerInstance(Locale.ROOT);
 
+    public enum Page {
+        MAIN, DEPOSIT, WITHDRAW, TRANSFER
+    }
+
     private final BlockPos atmPos;
     private long balance;
+    private Page currentPage = Page.MAIN;
+
+    private EditBox recipientInput;
+    private EditBox amountInput;
 
     public AtmScreen(BlockPos atmPos, long balance) {
         super(Component.translatable("screen.minedevice.atm.title"));
@@ -96,12 +105,41 @@ public final class AtmScreen extends Screen {
                 COLOR_FIELD_TEXT,
                 false);
 
-        guiGraphics.drawString(font,
-                Component.translatable("screen.minedevice.atm.hint"),
-                left + 22,
-                top + 82,
-                COLOR_HINT,
-                false);
+        if (currentPage == Page.MAIN) {
+            guiGraphics.drawString(font,
+                    Component.translatable("screen.minedevice.atm.hint"),
+                    left + 22,
+                    top + 82,
+                    COLOR_HINT,
+                    false);
+        } else if (currentPage == Page.DEPOSIT) {
+            guiGraphics.drawString(font,
+                    Component.translatable("screen.minedevice.atm.deposit_menu"),
+                    left + 22,
+                    top + 82,
+                    COLOR_HINT,
+                    false);
+        } else if (currentPage == Page.WITHDRAW) {
+            guiGraphics.drawString(font,
+                    Component.translatable("screen.minedevice.atm.withdraw_menu"),
+                    left + 22,
+                    top + 82,
+                    COLOR_HINT,
+                    false);
+        } else if (currentPage == Page.TRANSFER) {
+            guiGraphics.drawString(font,
+                    Component.translatable("screen.minedevice.atm.transfer.recipient"),
+                    left + 22,
+                    top + 88,
+                    COLOR_TEXT,
+                    false);
+            guiGraphics.drawString(font,
+                    Component.translatable("screen.minedevice.atm.transfer.amount"),
+                    left + 22,
+                    top + 132,
+                    COLOR_TEXT,
+                    false);
+        }
 
         super.render(guiGraphics, mouseX, mouseY, partialTick);
     }
@@ -116,101 +154,220 @@ public final class AtmScreen extends Screen {
         int gap = 8;
         int leftColumn = left + 22;
         int rightColumn = left + PANEL_WIDTH - 22 - buttonWidth;
-        int rowOne = top + 96;
-        int rowTwo = rowOne + buttonHeight + gap;
-        int rowThree = rowTwo + buttonHeight + gap;
-        int rowFour = rowThree + buttonHeight + gap;
-        int rowFive = rowFour + buttonHeight + gap;
 
-        addRenderableWidget(new AtmButton(
-                leftColumn,
-                rowOne,
-                buttonWidth,
-                buttonHeight,
-                Component.translatable("screen.minedevice.atm.deposit_all"),
-                () -> AtmNetworkingClient.requestDepositAll(atmPos)
-        ));
+        if (currentPage == Page.MAIN) {
+            int rowOne = top + 96;
+            int rowTwo = rowOne + buttonHeight + gap;
 
-        addRenderableWidget(new AtmButton(
-                rightColumn,
-                rowOne,
-                buttonWidth,
-                buttonHeight,
-                Component.translatable("screen.minedevice.atm.withdraw_all"),
-                () -> AtmNetworkingClient.requestWithdrawAll(atmPos)
-        ));
+            addRenderableWidget(new AtmButton(
+                    leftColumn,
+                    rowOne,
+                    buttonWidth,
+                    buttonHeight,
+                    Component.translatable("screen.minedevice.atm.deposit_menu_btn"),
+                    () -> {
+                        currentPage = Page.DEPOSIT;
+                        rebuildWidgets();
+                    }
+            ));
 
-        addRenderableWidget(new AtmButton(
-                leftColumn,
-                rowTwo,
-                buttonWidth,
-                buttonHeight,
-                Component.translatable("screen.minedevice.atm.deposit", 20),
-                () -> AtmNetworkingClient.requestDeposit(atmPos, 20)
-        ));
+            addRenderableWidget(new AtmButton(
+                    rightColumn,
+                    rowOne,
+                    buttonWidth,
+                    buttonHeight,
+                    Component.translatable("screen.minedevice.atm.withdraw_menu_btn"),
+                    () -> {
+                        currentPage = Page.WITHDRAW;
+                        rebuildWidgets();
+                    }
+            ));
 
-        addRenderableWidget(new AtmButton(
-                rightColumn,
-                rowTwo,
-                buttonWidth,
-                buttonHeight,
-                Component.translatable("screen.minedevice.atm.deposit", 100),
-                () -> AtmNetworkingClient.requestDeposit(atmPos, 100)
-        ));
+            addRenderableWidget(new AtmButton(
+                    leftColumn,
+                    rowTwo,
+                    buttonWidth,
+                    buttonHeight,
+                    Component.translatable("screen.minedevice.atm.transfer"),
+                    () -> {
+                        currentPage = Page.TRANSFER;
+                        rebuildWidgets();
+                    }
+            ));
 
-        addRenderableWidget(new AtmButton(
-                leftColumn,
-                rowThree,
-                buttonWidth,
-                buttonHeight,
-                Component.translatable("screen.minedevice.atm.deposit", 500),
-                () -> AtmNetworkingClient.requestDeposit(atmPos, 500)
-        ));
+            addRenderableWidget(new AtmButton(
+                    rightColumn,
+                    rowTwo,
+                    buttonWidth,
+                    buttonHeight,
+                    Component.translatable("gui.close"),
+                    this::onClose
+            ));
+        } else if (currentPage == Page.DEPOSIT) {
+            int rowOne = top + 96;
+            int rowTwo = rowOne + buttonHeight + gap;
+            int rowThree = rowTwo + buttonHeight + gap;
+            int rowFour = rowThree + buttonHeight + gap;
 
-        addRenderableWidget(new AtmButton(
-                rightColumn,
-                rowThree,
-                buttonWidth,
-                buttonHeight,
-                Component.translatable("screen.minedevice.atm.deposit", 1000),
-                () -> AtmNetworkingClient.requestDeposit(atmPos, 1000)
-        ));
+            addRenderableWidget(new AtmButton(
+                    leftColumn,
+                    rowOne,
+                    buttonWidth,
+                    buttonHeight,
+                    Component.translatable("screen.minedevice.atm.deposit_all"),
+                    () -> AtmNetworkingClient.requestDepositAll(atmPos)
+            ));
 
-        addRenderableWidget(new AtmButton(
-                leftColumn,
-                rowFour,
-                buttonWidth,
-                buttonHeight,
-                Component.translatable("screen.minedevice.atm.withdraw", 20),
-                () -> AtmNetworkingClient.requestWithdraw(atmPos, 20)
-        ));
+            addRenderableWidget(new AtmButton(
+                    leftColumn,
+                    rowTwo,
+                    buttonWidth,
+                    buttonHeight,
+                    Component.translatable("screen.minedevice.atm.deposit", 20),
+                    () -> AtmNetworkingClient.requestDeposit(atmPos, 20)
+            ));
 
-        addRenderableWidget(new AtmButton(
-                rightColumn,
-                rowFour,
-                buttonWidth,
-                buttonHeight,
-                Component.translatable("screen.minedevice.atm.withdraw", 100),
-                () -> AtmNetworkingClient.requestWithdraw(atmPos, 100)
-        ));
+            addRenderableWidget(new AtmButton(
+                    rightColumn,
+                    rowTwo,
+                    buttonWidth,
+                    buttonHeight,
+                    Component.translatable("screen.minedevice.atm.deposit", 100),
+                    () -> AtmNetworkingClient.requestDeposit(atmPos, 100)
+            ));
 
-        addRenderableWidget(new AtmButton(
-                leftColumn,
-                rowFive,
-                buttonWidth,
-                buttonHeight,
-                Component.translatable("screen.minedevice.atm.withdraw", 500),
-                () -> AtmNetworkingClient.requestWithdraw(atmPos, 500)
-        ));
+            addRenderableWidget(new AtmButton(
+                    leftColumn,
+                    rowThree,
+                    buttonWidth,
+                    buttonHeight,
+                    Component.translatable("screen.minedevice.atm.deposit", 500),
+                    () -> AtmNetworkingClient.requestDeposit(atmPos, 500)
+            ));
 
-        addRenderableWidget(new AtmButton(
-                rightColumn,
-                rowFive,
-                buttonWidth,
-                buttonHeight,
-                Component.translatable("screen.minedevice.atm.withdraw", 1000),
-                () -> AtmNetworkingClient.requestWithdraw(atmPos, 1000)
-        ));
+            addRenderableWidget(new AtmButton(
+                    rightColumn,
+                    rowThree,
+                    buttonWidth,
+                    buttonHeight,
+                    Component.translatable("screen.minedevice.atm.deposit", 1000),
+                    () -> AtmNetworkingClient.requestDeposit(atmPos, 1000)
+            ));
+
+            addRenderableWidget(new AtmButton(
+                    leftColumn,
+                    rowFour,
+                    buttonWidth,
+                    buttonHeight,
+                    Component.translatable("screen.minedevice.atm.back"),
+                    () -> {
+                        currentPage = Page.MAIN;
+                        rebuildWidgets();
+                    }
+            ));
+        } else if (currentPage == Page.WITHDRAW) {
+            int rowOne = top + 96;
+            int rowTwo = rowOne + buttonHeight + gap;
+            int rowThree = rowTwo + buttonHeight + gap;
+            int rowFour = rowThree + buttonHeight + gap;
+
+            addRenderableWidget(new AtmButton(
+                    rightColumn,
+                    rowOne,
+                    buttonWidth,
+                    buttonHeight,
+                    Component.translatable("screen.minedevice.atm.withdraw_all"),
+                    () -> AtmNetworkingClient.requestWithdrawAll(atmPos)
+            ));
+
+            addRenderableWidget(new AtmButton(
+                    leftColumn,
+                    rowTwo,
+                    buttonWidth,
+                    buttonHeight,
+                    Component.translatable("screen.minedevice.atm.withdraw", 20),
+                    () -> AtmNetworkingClient.requestWithdraw(atmPos, 20)
+            ));
+
+            addRenderableWidget(new AtmButton(
+                    rightColumn,
+                    rowTwo,
+                    buttonWidth,
+                    buttonHeight,
+                    Component.translatable("screen.minedevice.atm.withdraw", 100),
+                    () -> AtmNetworkingClient.requestWithdraw(atmPos, 100)
+            ));
+
+            addRenderableWidget(new AtmButton(
+                    leftColumn,
+                    rowThree,
+                    buttonWidth,
+                    buttonHeight,
+                    Component.translatable("screen.minedevice.atm.withdraw", 500),
+                    () -> AtmNetworkingClient.requestWithdraw(atmPos, 500)
+            ));
+
+            addRenderableWidget(new AtmButton(
+                    rightColumn,
+                    rowThree,
+                    buttonWidth,
+                    buttonHeight,
+                    Component.translatable("screen.minedevice.atm.withdraw", 1000),
+                    () -> AtmNetworkingClient.requestWithdraw(atmPos, 1000)
+            ));
+
+            addRenderableWidget(new AtmButton(
+                    leftColumn,
+                    rowFour,
+                    buttonWidth,
+                    buttonHeight,
+                    Component.translatable("screen.minedevice.atm.back"),
+                    () -> {
+                        currentPage = Page.MAIN;
+                        rebuildWidgets();
+                    }
+            ));
+        } else if (currentPage == Page.TRANSFER) {
+            recipientInput = new EditBox(font, left + 22, top + 98, PANEL_WIDTH - 44, 20, Component.literal("Recipient"));
+            recipientInput.setMaxLength(16);
+            addRenderableWidget(recipientInput);
+
+            amountInput = new EditBox(font, left + 22, top + 142, PANEL_WIDTH - 44, 20, Component.literal("Amount"));
+            amountInput.setFilter(s -> s.matches("\\d*"));
+            addRenderableWidget(amountInput);
+
+            addRenderableWidget(new AtmButton(
+                    leftColumn,
+                    top + 180,
+                    buttonWidth,
+                    buttonHeight,
+                    Component.translatable("screen.minedevice.atm.transfer_confirm"),
+                    () -> {
+                        String recipient = recipientInput.getValue().trim();
+                        String amountStr = amountInput.getValue().trim();
+                        if (!recipient.isEmpty() && !amountStr.isEmpty()) {
+                            try {
+                                long amount = Long.parseLong(amountStr);
+                                if (amount > 0) {
+                                    AtmNetworkingClient.requestTransfer(atmPos, recipient, amount);
+                                }
+                            } catch (NumberFormatException ignored) {}
+                        }
+                    }
+            ));
+
+            addRenderableWidget(new AtmButton(
+                    rightColumn,
+                    top + 180,
+                    buttonWidth,
+                    buttonHeight,
+                    Component.translatable("screen.minedevice.atm.back"),
+                    () -> {
+                        currentPage = Page.MAIN;
+                        rebuildWidgets();
+                    }
+            ));
+        }
     }
 
     private void setBalance(long balance) {

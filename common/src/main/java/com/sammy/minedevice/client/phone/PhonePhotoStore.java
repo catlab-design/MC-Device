@@ -159,6 +159,7 @@ final class PhonePhotoStore {
                     (previewMode ? "phone_photo/preview_" : "phone_photo/full_")
                             + Integer.toUnsignedString(fileName.hashCode())
             );
+            texture.setFilter(true, false);
             Minecraft.getInstance().getTextureManager().register(textureId, texture);
 
             PhotoTexture photoTexture = new PhotoTexture(textureId, textureWidth, textureHeight);

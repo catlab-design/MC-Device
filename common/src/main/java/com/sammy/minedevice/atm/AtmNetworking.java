@@ -17,6 +17,8 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.state.BlockState;
 
+import java.util.UUID;
+
 public final class AtmNetworking {
     public static final ResourceLocation OPEN_SCREEN = id("atm_open_screen");
     public static final ResourceLocation STATE_SYNC = id("atm_state_sync");
@@ -25,6 +27,7 @@ public final class AtmNetworking {
     public static final ResourceLocation DEPOSIT_ALL = id("atm_deposit_all");
     public static final ResourceLocation WITHDRAW = id("atm_withdraw");
     public static final ResourceLocation WITHDRAW_ALL = id("atm_withdraw_all");
+    public static final ResourceLocation TRANSFER = id("atm_transfer");
     private static final double ATM_ACCESS_DISTANCE_SQR = 8.0D * 8.0D;
     private static boolean initialized;
 
@@ -83,6 +86,72 @@ public final class AtmNetworking {
                 }
             });
         });
+
+        NetworkManager.registerReceiver(NetworkManager.c2s(), TRANSFER, (buf, context) -> {
+            BlockPos atmPos = buf.readBlockPos();
+            String recipientName = buf.readUtf();
+            long amount = buf.readLong();
+            context.queue(() -> {
+                if (context.getPlayer() instanceof ServerPlayer player) {
+                    handleTransfer(player, atmPos, recipientName, amount);
+                }
+            });
+        });
+    }
+
+    private static void handleTransfer(ServerPlayer player, BlockPos atmPos, String recipientName, long amount) {
+        BlockPos basePos = resolveAccessibleAtm(player, atmPos);
+        if (basePos == null) {
+            return;
+        }
+
+        if (amount <= 0L) {
+            sendState(player, basePos);
+            return;
+        }
+
+        UUID recipientUuid = null;
+        ServerPlayer recipient = player.getServer().getPlayerList().getPlayerByName(recipientName);
+        if (recipient != null) {
+            recipientUuid = recipient.getUUID();
+        } else {
+            var profileOpt = player.getServer().getProfileCache().get(recipientName);
+            if (profileOpt != null && profileOpt.isPresent()) {
+                recipientUuid = profileOpt.get().getId();
+            }
+        }
+
+        if (recipientUuid == null) {
+            player.displayClientMessage(Component.translatable("screen.minedevice.atm.status.player_not_found"), true);
+            sendState(player, basePos);
+            return;
+        }
+
+        if (recipientUuid.equals(player.getUUID())) {
+            player.displayClientMessage(Component.translatable("screen.minedevice.atm.status.transfer_self"), true);
+            sendState(player, basePos);
+            return;
+        }
+
+        AtmAccountStore store = AtmAccountStore.get(player.getServer());
+        long balance = store.getBalance(player.getUUID());
+        if (balance < amount) {
+            player.displayClientMessage(Component.translatable("screen.minedevice.atm.status.insufficient"), true);
+            sendState(player, basePos, balance);
+            return;
+        }
+
+        store.withdraw(player.getUUID(), amount);
+        store.deposit(recipientUuid, amount);
+
+        long nextBalance = store.getBalance(player.getUUID());
+        player.displayClientMessage(Component.translatable("screen.minedevice.atm.status.transferred", amount, recipientName, nextBalance), true);
+        sendState(player, basePos, nextBalance);
+
+        if (recipient != null) {
+            recipient.displayClientMessage(Component.translatable("screen.minedevice.atm.status.received", amount, player.getGameProfile().getName()), true);
+            sendState(recipient, basePos, store.getBalance(recipientUuid));
+        }
     }
 
     public static void openScreen(ServerPlayer player, BlockPos atmPos) {
