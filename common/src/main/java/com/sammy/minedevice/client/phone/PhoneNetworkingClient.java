@@ -76,6 +76,17 @@ public final class PhoneNetworkingClient {
             });
         });
 
+        NetworkManager.registerReceiver(NetworkManager.s2c(), PhoneNetworking.CALL_MUTE_SPEAKER_SYNC, (buf, context) -> {
+            boolean homePhone = buf.readBoolean();
+            BlockPos blockPos = homePhone ? buf.readBlockPos() : null;
+            boolean muted = buf.readBoolean();
+            boolean speakerEnabled = buf.readBoolean();
+            context.queue(() -> {
+                PhoneClientCallState.setMuted(blockPos, muted);
+                PhoneClientCallState.setSpeakerEnabled(blockPos, speakerEnabled);
+            });
+        });
+
         NetworkManager.registerReceiver(NetworkManager.s2c(), PhoneNetworking.CHAT_TOAST, (buf, context) -> {
             String senderName = buf.readUtf(PhoneData.MAX_CONTACT_NAME_LENGTH);
             String senderNumber = buf.readUtf(PhoneData.PHONE_NUMBER_LENGTH);
@@ -269,6 +280,18 @@ public final class PhoneNetworkingClient {
 
     public static void requestToggleSpeaker(BlockPos homePhonePos) {
         sendWithoutPayload(PhoneNetworking.CALL_SPEAKER_TOGGLE, homePhonePos);
+    }
+
+    public static void requestToggleSpeaker() {
+        sendWithoutPayload(PhoneNetworking.CALL_SPEAKER_TOGGLE, null);
+    }
+
+    public static void requestToggleMute() {
+        sendWithoutPayload(PhoneNetworking.CALL_MUTE_TOGGLE, null);
+    }
+
+    public static void requestToggleMute(BlockPos homePhonePos) {
+        sendWithoutPayload(PhoneNetworking.CALL_MUTE_TOGGLE, homePhonePos);
     }
 
     public static void requestSaveContact(String number, String suggestedName) {

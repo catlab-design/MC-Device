@@ -145,8 +145,8 @@ final class PhoneMediaSurfaceRenderer {
         int contentBottom = contentBounds.bottom();
         int headerBottom = viewerLayout.areaY;
 
-        guiGraphics.fill(displayLeft, displayTop, displayRight, displayBottom, 0xFFFFFFFF);
-        guiGraphics.fill(contentLeft, contentTop, contentRight, headerBottom, 0xFFFFFFFF);
+        guiGraphics.fill(displayLeft, displayTop, displayRight, displayBottom, 0xFF000000);
+        guiGraphics.fill(contentLeft, contentTop, contentRight, headerBottom, 0xFF000000);
 
         int deleteButtonSize = Math.round(24 * screen.scale);
         int deleteButtonX = contentBounds.right() - deleteButtonSize - Math.round(6 * screen.scale);
@@ -156,7 +156,7 @@ final class PhoneMediaSurfaceRenderer {
         float titleScale = PhoneScreenDraw.textScaleToFit(minecraft.font, pageText, maxTitleWidth, 0.6F);
         titleScale = Math.min(titleScale, 1.25F);
 
-        PhoneScreenDraw.drawScaledText(guiGraphics, minecraft.font, pageText, titleX, titleY, 0xFF000000, false, titleScale);
+        PhoneScreenDraw.drawScaledText(guiGraphics, minecraft.font, pageText, titleX, titleY, 0xFFFFFFFF, false, titleScale);
 
         guiGraphics.fill(viewerLayout.areaX, viewerLayout.areaY,
                 viewerLayout.areaX + viewerLayout.areaWidth, viewerLayout.areaY + viewerLayout.areaHeight, 0xFF000000);

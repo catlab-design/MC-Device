@@ -13,8 +13,42 @@ import java.util.UUID;
 public final class PhoneClientCallState {
     private static CallSnapshot mobileState = CallSnapshot.idle();
     private static final Map<BlockPos, CallSnapshot> homePhoneStates = new HashMap<>();
+    private static boolean mobileMuted;
+    private static boolean mobileSpeakerEnabled;
+    private static final Map<BlockPos, Boolean> homePhoneMuted = new HashMap<>();
+    private static final Map<BlockPos, Boolean> homePhoneSpeakerEnabled = new HashMap<>();
 
     private PhoneClientCallState() {
+    }
+
+    public static void setMuted(BlockPos blockPos, boolean muted) {
+        if (blockPos == null) {
+            mobileMuted = muted;
+        } else {
+            homePhoneMuted.put(blockPos.immutable(), muted);
+        }
+    }
+
+    public static boolean isMuted(BlockPos blockPos) {
+        if (blockPos == null) {
+            return mobileMuted;
+        }
+        return homePhoneMuted.getOrDefault(blockPos, false);
+    }
+
+    public static void setSpeakerEnabled(BlockPos blockPos, boolean enabled) {
+        if (blockPos == null) {
+            mobileSpeakerEnabled = enabled;
+        } else {
+            homePhoneSpeakerEnabled.put(blockPos.immutable(), enabled);
+        }
+    }
+
+    public static boolean isSpeakerEnabled(BlockPos blockPos) {
+        if (blockPos == null) {
+            return mobileSpeakerEnabled;
+        }
+        return homePhoneSpeakerEnabled.getOrDefault(blockPos, false);
     }
 
     public static void apply(PhoneCallState nextState, String nextNumber, String nextName) {

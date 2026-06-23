@@ -31,6 +31,8 @@ public final class PhoneNetworking {
     public static final ResourceLocation CALL_ANSWER = id("phone_call_answer");
     public static final ResourceLocation CALL_END = id("phone_call_end");
     public static final ResourceLocation CALL_SPEAKER_TOGGLE = id("phone_call_speaker_toggle");
+    public static final ResourceLocation CALL_MUTE_TOGGLE = id("phone_call_mute_toggle");
+    public static final ResourceLocation CALL_MUTE_SPEAKER_SYNC = id("phone_call_mute_speaker_sync");
     public static final ResourceLocation CALL_SYNC_REQUEST = id("phone_call_sync_request");
     public static final ResourceLocation HOME_PHONE_HANDSET_PUT_DOWN = id("home_phone_handset_put_down");
     public static final ResourceLocation CHAT_FRIEND_ADD = id("phone_chat_friend_add");
@@ -109,8 +111,23 @@ public final class PhoneNetworking {
         NetworkManager.registerReceiver(NetworkManager.c2s(), CALL_SPEAKER_TOGGLE, (buf, context) -> {
             BlockPos homePhonePos = readHomePhoneContext(buf);
             context.queue(() -> {
+                ServerPlayer player = (ServerPlayer) context.getPlayer();
                 if (homePhonePos != null) {
-                    PhoneCallManager.toggleHomePhoneSpeaker((ServerPlayer) context.getPlayer(), homePhonePos);
+                    PhoneCallManager.toggleHomePhoneSpeaker(player, homePhonePos);
+                } else {
+                    PhoneCallManager.toggleSpeaker(player);
+                }
+            });
+        });
+
+        NetworkManager.registerReceiver(NetworkManager.c2s(), CALL_MUTE_TOGGLE, (buf, context) -> {
+            BlockPos homePhonePos = readHomePhoneContext(buf);
+            context.queue(() -> {
+                ServerPlayer player = (ServerPlayer) context.getPlayer();
+                if (homePhonePos != null) {
+                    PhoneCallManager.toggleHomePhoneMute(player, homePhonePos);
+                } else {
+                    PhoneCallManager.toggleMute(player);
                 }
             });
         });
@@ -251,6 +268,14 @@ public final class PhoneNetworking {
         buf.writeUtf(otherName == null ? "" : otherName, PhoneData.MAX_CONTACT_NAME_LENGTH);
         writeOptionalUuid(buf, otherProfileId);
         NetworkManager.sendToPlayer(player, CALL_STATE_SYNC, buf);
+    }
+
+    public static void sendMuteSpeakerSync(ServerPlayer player, BlockPos homePhonePos, boolean muted, boolean speakerEnabled) {
+        FriendlyByteBuf buf = new FriendlyByteBuf(Unpooled.buffer());
+        writeHomePhoneContext(buf, homePhonePos);
+        buf.writeBoolean(muted);
+        buf.writeBoolean(speakerEnabled);
+        NetworkManager.sendToPlayer(player, CALL_MUTE_SPEAKER_SYNC, buf);
     }
 
     public static void openHomePhoneScreen(ServerPlayer player, BlockPos homePhonePos) {
@@ -514,8 +539,13 @@ public final class PhoneNetworking {
             return;
         }
 
-        String resolvedName = PhoneCallManager.resolveContactName(server, number, requestedName);
-        String contactName = resolvedName == null || resolvedName.isBlank() ? number : resolvedName;
+        String contactName;
+        if (requestedName != null && !requestedName.isBlank() && !requestedName.equals(number)) {
+            contactName = requestedName;
+        } else {
+            String resolvedName = PhoneCallManager.resolveContactName(server, number, requestedName);
+            contactName = resolvedName == null || resolvedName.isBlank() ? number : resolvedName;
+        }
         if (homePhonePos != null) {
             HomePhoneBlockEntity homePhone = getAccessibleHomePhone(player, homePhonePos);
             if (homePhone == null) {

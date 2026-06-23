@@ -82,7 +82,6 @@ final class PhoneCallSurfaceRenderer {
         UiRect contentBounds = screen.getCallSurfaceBounds();
         String ownNumber = screen.getOwnPhoneNumber();
         int headerHeight = screen.getCallHeaderHeight();
-        int panelPadding = Math.max(7, Math.round(8 * screen.scale));
         int rowTop = contentBounds.top + Math.max(5, Math.round(6 * screen.scale));
         int rowHeight = Math.max(14, Math.round(16 * screen.scale));
         int chipPadding = Math.max(4, Math.round(5 * screen.scale));
@@ -109,10 +108,27 @@ final class PhoneCallSurfaceRenderer {
         int titleY = rowTop + Math.max(0, (rowHeight - titleHeight) / 2);
         PhoneScreenDraw.drawScaledText(guiGraphics, minecraft.font, titleText, titleX, titleY, 0xFF000000, false, titleScale);
 
-        int panelLeft = contentBounds.left + panelPadding;
-        int panelRight = contentBounds.right() - panelPadding;
-        guiGraphics.fill(panelLeft, panelTop, panelRight, panelBottom, 0xFFEAEBEE);
-        guiGraphics.fill(panelLeft + 1, panelTop + 1, panelRight - 1, panelBottom - 1, 0xCCF2F2F7);
+        UiRect addButtonBounds = screen.getAddContactHeaderButtonBounds();
+        guiGraphics.fill(addButtonBounds.left, addButtonBounds.top, addButtonBounds.right(), addButtonBounds.bottom(), 0xFFEAEBEE);
+        guiGraphics.fill(addButtonBounds.left + 1, addButtonBounds.top + 1, addButtonBounds.right() - 1, addButtonBounds.bottom() - 1, 0xFFFFFFFF);
+        Component addText = Component.literal("+  ");
+        Component addLabel = Component.translatable("screen.minedevice.phone.call.contacts.add_label");
+        float addLabelScale = PhoneScreenDraw.textScaleToFit(minecraft.font, addLabel,
+                addButtonBounds.width - Math.max(20, Math.round(24 * screen.scale)), 0.35F);
+        int addLabelWidth = PhoneScreenDraw.scaledTextWidth(minecraft.font, addLabel, addLabelScale);
+        int addLabelHeight = PhoneScreenDraw.scaledTextHeight(minecraft.font, addLabelScale);
+        int addLabelX = addButtonBounds.left + Math.max(10, Math.round(12 * screen.scale));
+        int addLabelY = addButtonBounds.top + (addButtonBounds.height - addLabelHeight) / 2;
+        Component addIcon = Component.literal("+");
+        float addIconScale = PhoneScreenDraw.textScaleToFit(minecraft.font, addIcon,
+                addButtonBounds.height - Math.max(4, Math.round(6 * screen.scale)), 0.40F);
+        int addIconWidth = PhoneScreenDraw.scaledTextWidth(minecraft.font, addIcon, addIconScale);
+        int addIconHeight = PhoneScreenDraw.scaledTextHeight(minecraft.font, addIconScale);
+        PhoneScreenDraw.drawScaledText(guiGraphics, minecraft.font, addLabel, addLabelX, addLabelY, 0xFF007AFF, false, addLabelScale);
+        PhoneScreenDraw.drawScaledText(guiGraphics, minecraft.font, addIcon,
+                addButtonBounds.right() - addIconWidth - Math.max(10, Math.round(12 * screen.scale)),
+                addButtonBounds.top + (addButtonBounds.height - addIconHeight) / 2,
+                0xFF007AFF, false, addIconScale);
 
         if (canSaveNumber) {
             guiGraphics.fill(saveButtonBounds.left, saveButtonBounds.top, saveButtonBounds.right(), saveButtonBounds.bottom(), 0xFFEAEBEE);
@@ -133,17 +149,20 @@ final class PhoneCallSurfaceRenderer {
             Component hintText = canSaveNumber
                     ? Component.translatable("screen.minedevice.phone.call.contacts.hint_save")
                     : Component.translatable("screen.minedevice.phone.call.contacts.hint");
+            int textAreaLeft = contentBounds.left + Math.max(7, Math.round(8 * screen.scale));
+            int textAreaRight = contentBounds.right() - Math.max(7, Math.round(8 * screen.scale));
+            int textAreaWidth = textAreaRight - textAreaLeft;
             int emptyAreaTop = canSaveNumber ? saveButtonBounds.bottom() + Math.max(5, Math.round(6 * screen.scale)) : panelTop;
             int emptyAreaHeight = panelBottom - emptyAreaTop;
             float emptyScale = PhoneScreenDraw.textScaleToFit(minecraft.font, emptyText,
-                    panelRight - panelLeft - Math.round(10 * screen.scale), 0.35F);
+                    textAreaWidth, 0.35F);
             float hintScale = PhoneScreenDraw.textScaleToFit(minecraft.font, hintText,
-                    panelRight - panelLeft - Math.round(10 * screen.scale), 0.30F);
+                    textAreaWidth, 0.30F);
             int emptyWidth = PhoneScreenDraw.scaledTextWidth(minecraft.font, emptyText, emptyScale);
             int hintWidth = PhoneScreenDraw.scaledTextWidth(minecraft.font, hintText, hintScale);
-            int emptyX = panelLeft + ((panelRight - panelLeft - emptyWidth) / 2);
+            int emptyX = textAreaLeft + ((textAreaWidth - emptyWidth) / 2);
             int emptyY = emptyAreaTop + (emptyAreaHeight / 2) - Math.max(8, Math.round(9 * screen.scale));
-            int hintX = panelLeft + ((panelRight - panelLeft - hintWidth) / 2);
+            int hintX = textAreaLeft + ((textAreaWidth - hintWidth) / 2);
             int hintY = emptyY + PhoneScreenDraw.scaledTextHeight(minecraft.font, emptyScale) + Math.max(4, Math.round(5 * screen.scale));
             PhoneScreenDraw.drawScaledText(guiGraphics, minecraft.font, emptyText, emptyX, emptyY, 0xFF000000, false, emptyScale);
             PhoneScreenDraw.drawScaledText(guiGraphics, minecraft.font, hintText, hintX, hintY, 0xFF8E8E93, false, hintScale);
@@ -152,25 +171,38 @@ final class PhoneCallSurfaceRenderer {
                 PhoneContact contact = contacts.get(index);
                 UiRect rowBounds = screen.getContactRowBounds(index, contacts.size());
                 UiRect deleteBounds = screen.getContactDeleteButtonBounds(index, contacts.size());
+                UiRect editBounds = screen.getContactEditButtonBounds(index, contacts.size());
                 guiGraphics.fill(rowBounds.left, rowBounds.top, rowBounds.right(), rowBounds.bottom(), 0xFFEAEBEE);
                 guiGraphics.fill(rowBounds.left + 1, rowBounds.top + 1, rowBounds.right() - 1, rowBounds.bottom() - 1, 0xFFEAEBEE);
 
                 Component nameText = Component.literal(contact.displayName());
                 Component numberText = Component.literal(contact.number());
+                Component lineText = contact.displayName().equals(contact.number())
+                        ? numberText : nameText;
                 int textLeft = rowBounds.left + Math.max(5, Math.round(6 * screen.scale));
-                int textRight = deleteBounds.left - Math.max(4, Math.round(6 * screen.scale));
+                int textRight = editBounds.left - Math.max(4, Math.round(6 * screen.scale));
                 int textMaxWidth = Math.max(18, textRight - textLeft);
-                float nameScale = PhoneScreenDraw.textScaleToFit(minecraft.font, nameText, textMaxWidth, 0.40F);
-                float numberScale = PhoneScreenDraw.textScaleToFit(minecraft.font, numberText, textMaxWidth, 0.35F);
-                PhoneScreenDraw.drawScaledText(guiGraphics, minecraft.font, nameText, textLeft,
-                        rowBounds.top + Math.max(3, Math.round(4 * screen.scale)), 0xFF000000, false, nameScale);
-                PhoneScreenDraw.drawScaledText(guiGraphics, minecraft.font, numberText, textLeft,
-                        rowBounds.bottom() - PhoneScreenDraw.scaledTextHeight(minecraft.font, numberScale)
-                                - Math.max(3, Math.round(4 * screen.scale)),
-                        0xFF8E8E93, false, numberScale);
+                boolean showNumberOnly = contact.displayName().equals(contact.number());
+                float lineScale = PhoneScreenDraw.textScaleToFit(minecraft.font, lineText, textMaxWidth, showNumberOnly ? 0.30F : 0.35F);
+                int lineHeight = PhoneScreenDraw.scaledTextHeight(minecraft.font, lineScale);
+                PhoneScreenDraw.drawScaledText(guiGraphics, minecraft.font, lineText, textLeft,
+                        rowBounds.top + (rowBounds.height - lineHeight) / 2,
+                        showNumberOnly ? 0xFF8E8E93 : 0xFF000000, false, lineScale);
 
                 guiGraphics.blit(PhoneScreen.DELETE_BUTTON_TEXTURE, deleteBounds.left, deleteBounds.top,
                         deleteBounds.width, deleteBounds.height, 0.0F, 0.0F, 24, 24, 24, 24);
+
+                guiGraphics.fill(editBounds.left, editBounds.top, editBounds.right(), editBounds.bottom(), 0xFF007AFF);
+                guiGraphics.fill(editBounds.left + 1, editBounds.top + 1, editBounds.right() - 1, editBounds.bottom() - 1, 0xFF007AFF);
+                Component editIcon = Component.literal("✎");
+                float editScale = PhoneScreenDraw.textScaleToFit(minecraft.font, editIcon,
+                        editBounds.width - Math.max(2, Math.round(3 * screen.scale)), 0.35F);
+                int editIconWidth = PhoneScreenDraw.scaledTextWidth(minecraft.font, editIcon, editScale);
+                int editIconHeight = PhoneScreenDraw.scaledTextHeight(minecraft.font, editScale);
+                PhoneScreenDraw.drawScaledText(guiGraphics, minecraft.font, editIcon,
+                        editBounds.left + (editBounds.width - editIconWidth) / 2,
+                        editBounds.top + (editBounds.height - editIconHeight) / 2,
+                        0xFFFFFFFF, false, editScale);
             }
         }
 
@@ -187,12 +219,12 @@ final class PhoneCallSurfaceRenderer {
         UiRect contentBounds = screen.getCallSurfaceBounds();
         int numberInsetX = Math.max(7, Math.round(9 * screen.scale));
         
-        int statusY = contentBounds.top + Math.max(20, Math.round(28 * screen.scale));
+        int statusY = contentBounds.top + Math.max(24, Math.round(32 * screen.scale));
         UiRect sessionNumberBounds = new UiRect(
                 contentBounds.left + numberInsetX,
-                statusY + Math.max(12, Math.round(16 * screen.scale)),
+                statusY + Math.max(20, Math.round(24 * screen.scale)),
                 Math.max(24, contentBounds.width - (numberInsetX * 2)),
-                Math.max(20, Math.round(28 * screen.scale)));
+                Math.max(40, Math.round(48 * screen.scale)));
         int subY = sessionNumberBounds.bottom() + Math.max(8, Math.round(10 * screen.scale));
 
         Component statusText = Component.translatable(screen.activeCallConnected
@@ -248,19 +280,46 @@ final class PhoneCallSurfaceRenderer {
         UiRect connectButtonBounds = screen.getCallConnectButtonBounds();
         UiRect hangupButtonBounds = screen.getCallHangupButtonBounds();
 
-        // Render answer button (only when incoming call, not yet connected)
         if (screen.activeCallIncoming && !screen.activeCallConnected) {
+            int gap = Math.max(5, Math.round(6 * screen.scale));
+            int incomingHangupX = connectButtonBounds.right() + gap;
             guiGraphics.blit(PhoneScreen.ANSWER_BUTTON_TEXTURE, 
                     connectButtonBounds.left, connectButtonBounds.top,
                     connectButtonBounds.width, connectButtonBounds.height, 
                     0.0F, 0.0F, 24, 24, 24, 24);
+            guiGraphics.blit(PhoneScreen.HANGUP_BUTTON_TEXTURE, 
+                    incomingHangupX, connectButtonBounds.top,
+                    connectButtonBounds.width, connectButtonBounds.height, 
+                    0.0F, 0.0F, 24, 24, 24, 24);
+        } else {
+            guiGraphics.blit(PhoneScreen.HANGUP_BUTTON_TEXTURE, 
+                    hangupButtonBounds.left, hangupButtonBounds.top,
+                    hangupButtonBounds.width, hangupButtonBounds.height, 
+                    0.0F, 0.0F, 24, 24, 24, 24);
         }
-        
-        // Render hangup button
-        guiGraphics.blit(PhoneScreen.HANGUP_BUTTON_TEXTURE, 
-                hangupButtonBounds.left, hangupButtonBounds.top,
-                hangupButtonBounds.width, hangupButtonBounds.height, 
-                0.0F, 0.0F, 24, 24, 24, 24);
+
+        if (screen.activeCallConnected) {
+            UiRect muteBounds = screen.getCallMuteButtonBounds();
+            UiRect speakerBounds = screen.getCallSpeakerButtonBounds();
+            renderCallActionButton(guiGraphics, muteBounds, "M",
+                    screen.callMuted ? 0xFFFF3B30 : 0xFFF2F2F7,
+                    screen.callMuted ? 0xFFE6352B : 0xFFEAEBEE,
+                    screen.callMuted ? 0xFFFFFFFF : 0xFF8E8E93);
+            renderCallActionButton(guiGraphics, speakerBounds, "S",
+                    screen.callSpeakerEnabled ? 0xFF007AFF : 0xFFF2F2F7,
+                    screen.callSpeakerEnabled ? 0xFF006AD6 : 0xFFEAEBEE,
+                    screen.callSpeakerEnabled ? 0xFFFFFFFF : 0xFF8E8E93);
+        }
+    }
+
+    private static void renderCallActionButton(GuiGraphics guiGraphics, UiRect bounds, String label,
+                                                 int fillColor, int borderColor, int textColor) {
+        guiGraphics.fill(bounds.left, bounds.top, bounds.right(), bounds.bottom(), borderColor);
+        guiGraphics.fill(bounds.left + 1, bounds.top + 1, bounds.right() - 1, bounds.bottom() - 1, fillColor);
+        Font font = Minecraft.getInstance().font;
+        int textX = bounds.left + (bounds.width - font.width(label)) / 2;
+        int textY = bounds.top + (bounds.height - font.lineHeight) / 2;
+        guiGraphics.drawString(font, label, textX, textY, textColor, false);
     }
 
     static void renderCallBackdrop(PhoneScreen screen, GuiGraphics guiGraphics) {
@@ -293,6 +352,10 @@ final class PhoneCallSurfaceRenderer {
 
     static void renderMediaBackdrop(PhoneScreen screen, GuiGraphics guiGraphics) {
         UiRect backdropBounds = screen.getMediaBackdropBounds();
+        if (screen.photoViewerMode) {
+            guiGraphics.fill(backdropBounds.left, backdropBounds.top, backdropBounds.right(), backdropBounds.bottom(), 0xFF000000);
+            return;
+        }
         int topBandHeight = Math.max(34, Math.round(40 * screen.scale));
         int bottomBandHeight = Math.max(24, Math.round(30 * screen.scale));
         int accentInset = Math.max(8, Math.round(10 * screen.scale));
@@ -329,6 +392,88 @@ final class PhoneCallSurfaceRenderer {
             guiGraphics.fill(bounds.left + underlineInset, underlineY,
                     bounds.right() - underlineInset, underlineY + underlineHeight, 0xFF007AFF);
         }
+    }
+
+    static void renderAddContactSurface(PhoneScreen screen, GuiGraphics guiGraphics) {
+        Minecraft minecraft = Minecraft.getInstance();
+        UiRect contentBounds = screen.getCallSurfaceBounds();
+        UiRect popupBounds = screen.getAddContactPopupBounds();
+        UiRect nameBounds = screen.getAddContactNameBounds();
+        UiRect numberBounds = screen.getAddContactNumberBounds();
+        UiRect saveBounds = screen.getAddContactSaveButtonBounds();
+        UiRect cancelBounds = screen.getAddContactCancelButtonBounds();
+
+        UiRect backdropBounds = screen.getCallBackdropBounds();
+        guiGraphics.fill(backdropBounds.left, backdropBounds.top, backdropBounds.right(), backdropBounds.bottom(), 0x80000000);
+
+        int popupCornerRadius = Math.max(8, Math.round(10 * screen.scale));
+        guiGraphics.fill(popupBounds.left, popupBounds.top, popupBounds.right(), popupBounds.bottom(), 0xFFEAEBEE);
+        guiGraphics.fill(popupBounds.left + 1, popupBounds.top + 1, popupBounds.right() - 1, popupBounds.bottom() - 1, 0xFFFFFFFF);
+
+        int innerInset = Math.max(8, Math.round(10 * screen.scale));
+        int titleHeight = Math.max(18, Math.round(22 * screen.scale));
+        int topPadding = Math.max(12, Math.round(14 * screen.scale));
+        int titleX = popupBounds.left + innerInset;
+        int titleY = popupBounds.top + topPadding;
+        Component titleText = screen.editingContactOriginalNumber != null
+                ? Component.translatable("screen.minedevice.phone.call.contacts.edit_title")
+                : Component.translatable("screen.minedevice.phone.call.contacts.add_title");
+        float titleScale = PhoneScreenDraw.textScaleToFit(minecraft.font, titleText,
+                popupBounds.width - (innerInset * 2), 0.40F);
+        int titleTextHeight = PhoneScreenDraw.scaledTextHeight(minecraft.font, titleScale);
+        PhoneScreenDraw.drawScaledText(guiGraphics, minecraft.font, titleText, titleX, titleY + (titleHeight - titleTextHeight) / 2, 0xFF000000, false, titleScale);
+
+        guiGraphics.fill(nameBounds.left, nameBounds.top, nameBounds.right(), nameBounds.bottom(), 0xFFC7C7CC);
+        guiGraphics.fill(nameBounds.left + 1, nameBounds.top + 1, nameBounds.right() - 1, nameBounds.bottom() - 1, 0xFFFFFFFF);
+        String displayName = screen.addContactName.isEmpty() ? "" : screen.addContactName;
+        boolean nameActive = screen.addContactNameFieldFocused;
+        Component nameText = nameActive ? Component.literal(displayName + "_") : (displayName.isEmpty() ? Component.translatable("screen.minedevice.phone.call.contacts.name_label") : Component.literal(displayName));
+        int nameFieldInset = Math.max(4, Math.round(5 * screen.scale));
+        float nameFieldScale = PhoneScreenDraw.textScaleToFit(minecraft.font, nameText,
+                nameBounds.width - (nameFieldInset * 2), 0.30F);
+        int nameTextHeight = PhoneScreenDraw.scaledTextHeight(minecraft.font, nameFieldScale);
+        PhoneScreenDraw.drawScaledText(guiGraphics, minecraft.font, nameText,
+                nameBounds.left + nameFieldInset, nameBounds.top + (nameBounds.height - nameTextHeight) / 2,
+                displayName.isEmpty() && !nameActive ? 0xFF8E8E93 : 0xFF000000, false, nameFieldScale);
+
+        guiGraphics.fill(numberBounds.left, numberBounds.top, numberBounds.right(), numberBounds.bottom(), 0xFFC7C7CC);
+        guiGraphics.fill(numberBounds.left + 1, numberBounds.top + 1, numberBounds.right() - 1, numberBounds.bottom() - 1, 0xFFFFFFFF);
+        String displayNumber = screen.addContactNumber.isEmpty() ? "" : screen.addContactNumber;
+        boolean numberActive = !nameActive;
+        Component numberText = numberActive ? Component.literal(displayNumber + "_") : (displayNumber.isEmpty() ? Component.translatable("screen.minedevice.phone.call.contacts.number_label") : Component.literal(displayNumber));
+        float numberFieldScale = PhoneScreenDraw.textScaleToFit(minecraft.font, numberText,
+                numberBounds.width - (nameFieldInset * 2), 0.30F);
+        int numberTextHeight = PhoneScreenDraw.scaledTextHeight(minecraft.font, numberFieldScale);
+        PhoneScreenDraw.drawScaledText(guiGraphics, minecraft.font, numberText,
+                numberBounds.left + nameFieldInset, numberBounds.top + (numberBounds.height - numberTextHeight) / 2,
+                displayNumber.isEmpty() && !numberActive ? 0xFF8E8E93 : 0xFF000000, false, numberFieldScale);
+
+        boolean canSave = !screen.addContactNumber.isEmpty();
+        int saveFill = canSave ? 0xFF34C759 : 0xFFD1D1D6;
+        int saveBorder = canSave ? 0xFF4CD964 : 0xFFE5E5EA;
+        guiGraphics.fill(saveBounds.left, saveBounds.top, saveBounds.right(), saveBounds.bottom(), saveBorder);
+        guiGraphics.fill(saveBounds.left + 1, saveBounds.top + 1, saveBounds.right() - 1, saveBounds.bottom() - 1, saveFill);
+        Component saveText = Component.translatable("screen.minedevice.phone.call.contacts.save_button");
+        float saveScale = PhoneScreenDraw.textScaleToFit(minecraft.font, saveText,
+                saveBounds.width - Math.round(8 * screen.scale), 0.35F);
+        int saveTextWidth = PhoneScreenDraw.scaledTextWidth(minecraft.font, saveText, saveScale);
+        int saveTextHeight = PhoneScreenDraw.scaledTextHeight(minecraft.font, saveScale);
+        PhoneScreenDraw.drawScaledText(guiGraphics, minecraft.font, saveText,
+                saveBounds.left + (saveBounds.width - saveTextWidth) / 2,
+                saveBounds.top + (saveBounds.height - saveTextHeight) / 2,
+                0xFFFFFFFF, false, saveScale);
+
+        guiGraphics.fill(cancelBounds.left, cancelBounds.top, cancelBounds.right(), cancelBounds.bottom(), 0xFFEAEBEE);
+        guiGraphics.fill(cancelBounds.left + 1, cancelBounds.top + 1, cancelBounds.right() - 1, cancelBounds.bottom() - 1, 0xFFFFFFFF);
+        Component cancelText = Component.translatable("screen.minedevice.phone.call.contacts.cancel_button");
+        float cancelScale = PhoneScreenDraw.textScaleToFit(minecraft.font, cancelText,
+                cancelBounds.width - Math.round(8 * screen.scale), 0.35F);
+        int cancelTextWidth = PhoneScreenDraw.scaledTextWidth(minecraft.font, cancelText, cancelScale);
+        int cancelTextHeight = PhoneScreenDraw.scaledTextHeight(minecraft.font, cancelScale);
+        PhoneScreenDraw.drawScaledText(guiGraphics, minecraft.font, cancelText,
+                cancelBounds.left + (cancelBounds.width - cancelTextWidth) / 2,
+                cancelBounds.top + (cancelBounds.height - cancelTextHeight) / 2,
+                0xFF007AFF, false, cancelScale);
     }
 
     private static void renderDialPadButton(GuiGraphics guiGraphics, Font font, UiRect bounds, Component text,

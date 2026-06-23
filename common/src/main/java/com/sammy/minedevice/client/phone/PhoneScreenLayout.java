@@ -185,10 +185,19 @@ final class PhoneScreenLayout {
         return new UiRect(iconX, iconY, iconSize, iconSize);
     }
 
-    UiRect callListMenuBounds() {
+UiRect callListMenuBounds() {
         UiRect dialBounds = callDialMenuBounds();
         int gap = Math.max(8, Math.round(10 * scale));
         return new UiRect(dialBounds.right() + gap, dialBounds.top, dialBounds.width, dialBounds.height);
+    }
+
+    UiRect addContactHeaderButtonBounds() {
+        UiRect panelBounds = contactPanelBounds();
+        int inset = Math.max(7, Math.round(8 * scale));
+        int rowHeight = Math.max(16, Math.round(18 * scale));
+        int top = panelBounds.top + inset;
+        return new UiRect(panelBounds.left + inset, top,
+                panelBounds.width - (inset * 2), rowHeight);
     }
 
     UiRect callNumberDisplayBounds() {
@@ -241,27 +250,30 @@ final class PhoneScreenLayout {
 
     UiRect contactPanelBounds() {
         UiRect contentBounds = callSurfaceBounds();
-        int panelPadding = Math.max(7, Math.round(8 * scale));
         int panelTop = contentBounds.top + callHeaderHeight() + Math.max(4, Math.round(5 * scale));
         int panelBottom = callDialMenuBounds().top - callMenuBottomReserve();
-        return new UiRect(panelPadding + contentBounds.left, panelTop,
-                contentBounds.width - (panelPadding * 2), Math.max(24, panelBottom - panelTop));
+        return new UiRect(contentBounds.left, panelTop,
+                contentBounds.width, Math.max(24, panelBottom - panelTop));
     }
 
     UiRect contactSaveButtonBounds() {
-        UiRect panelBounds = contactPanelBounds();
-        int inset = Math.max(4, Math.round(5 * scale));
+        UiRect addRow = addContactHeaderButtonBounds();
+        int gap = Math.max(3, Math.round(4 * scale));
         int buttonHeight = Math.max(16, Math.round(18 * scale));
-        return new UiRect(panelBounds.left + inset, panelBounds.top + inset,
-                panelBounds.width - (inset * 2), buttonHeight);
+        int top = addRow.bottom() + gap;
+        return new UiRect(addRow.left, top, addRow.width, buttonHeight);
     }
 
     UiRect contactRowsBounds(boolean canSaveCurrentNumber) {
         UiRect panelBounds = contactPanelBounds();
-        int inset = Math.max(4, Math.round(5 * scale));
-        int top = panelBounds.top + inset;
+        int inset = Math.max(7, Math.round(8 * scale));
+        int top;
         if (canSaveCurrentNumber) {
             top = contactSaveButtonBounds().bottom() + Math.max(4, Math.round(5 * scale));
+        } else {
+            UiRect addRow = addContactHeaderButtonBounds();
+            int gap = Math.max(3, Math.round(4 * scale));
+            top = addRow.bottom() + gap;
         }
         return new UiRect(panelBounds.left + inset, top,
                 panelBounds.width - (inset * 2), Math.max(20, panelBounds.bottom() - inset - top));
@@ -270,9 +282,7 @@ final class PhoneScreenLayout {
     UiRect contactRowBounds(int index, int contactCount, boolean canSaveCurrentNumber) {
         UiRect rowsBounds = contactRowsBounds(canSaveCurrentNumber);
         int rowGap = Math.max(3, Math.round(4 * scale));
-        int safeCount = Math.max(1, contactCount);
-        int availableHeight = rowsBounds.height - (rowGap * (safeCount - 1));
-        int rowHeight = Math.max(18, availableHeight / safeCount);
+        int rowHeight = Math.max(16, Math.round(18 * scale));
         int top = rowsBounds.top + index * (rowHeight + rowGap);
         return new UiRect(rowsBounds.left, top, rowsBounds.width, rowHeight);
     }
@@ -286,6 +296,12 @@ final class PhoneScreenLayout {
         return new UiRect(x, y, size, size);
     }
 
+    UiRect contactEditButtonBounds(int index, int contactCount, boolean canSaveCurrentNumber) {
+        UiRect deleteBounds = contactDeleteButtonBounds(index, contactCount, canSaveCurrentNumber);
+        int gap = Math.max(2, Math.round(2 * scale));
+        return new UiRect(deleteBounds.left - deleteBounds.width - gap, deleteBounds.top, deleteBounds.width, deleteBounds.height);
+    }
+
     int contactIndexAt(double mouseX, double mouseY, int contactCount, boolean canSaveCurrentNumber) {
         for (int index = 0; index < contactCount; index++) {
             if (contactRowBounds(index, contactCount, canSaveCurrentNumber).contains(mouseX, mouseY)) {
@@ -293,6 +309,61 @@ final class PhoneScreenLayout {
             }
         }
         return -1;
+    }
+
+    UiRect addContactPopupBounds() {
+        UiRect contentBounds = callSurfaceBounds();
+        int panelInset = Math.max(4, Math.round(6 * scale));
+        int panelWidth = contentBounds.width - (panelInset * 2);
+        int fieldHeight = Math.max(14, Math.round(16 * scale));
+        int innerInset = Math.max(8, Math.round(10 * scale));
+        int titleHeight = Math.max(18, Math.round(22 * scale));
+        int topPadding = Math.max(12, Math.round(14 * scale));
+        int bottomPadding = Math.max(12, Math.round(14 * scale));
+        int gap = Math.max(8, Math.round(10 * scale));
+        int buttonGap = Math.max(12, Math.round(14 * scale));
+        int buttonHeight = Math.max(12, Math.round(14 * scale));
+        int contentHeight = topPadding + titleHeight + gap + fieldHeight + gap + fieldHeight + buttonGap + buttonHeight + bottomPadding;
+        int panelX = contentBounds.left + panelInset;
+        int panelY = contentBounds.top + (contentBounds.height - contentHeight) / 2;
+        return new UiRect(panelX, panelY, panelWidth, contentHeight);
+    }
+
+    UiRect addContactNameBounds() {
+        UiRect popupBounds = addContactPopupBounds();
+        int fieldHeight = Math.max(14, Math.round(16 * scale));
+        int innerInset = Math.max(8, Math.round(10 * scale));
+        int titleHeight = Math.max(18, Math.round(22 * scale));
+        int topPadding = Math.max(12, Math.round(14 * scale));
+        int gap = Math.max(8, Math.round(10 * scale));
+        int top = popupBounds.top + topPadding + titleHeight + gap;
+        return new UiRect(popupBounds.left + innerInset, top,
+                popupBounds.width - (innerInset * 2), fieldHeight);
+    }
+
+    UiRect addContactNumberBounds() {
+        UiRect nameBounds = addContactNameBounds();
+        int gap = Math.max(8, Math.round(10 * scale));
+        int fieldHeight = Math.max(14, Math.round(16 * scale));
+        return new UiRect(nameBounds.left, nameBounds.bottom() + gap,
+                nameBounds.width, fieldHeight);
+    }
+
+    UiRect addContactSaveButtonBounds() {
+        UiRect numberBounds = addContactNumberBounds();
+        int gap = Math.max(12, Math.round(14 * scale));
+        int buttonHeight = Math.max(12, Math.round(14 * scale));
+        int buttonWidth = Math.max(32, Math.round(40 * scale));
+        int buttonGap = Math.max(4, Math.round(5 * scale));
+        int totalGroupWidth = buttonWidth * 2 + buttonGap;
+        int left = numberBounds.left + (numberBounds.width - totalGroupWidth) / 2;
+        return new UiRect(left, numberBounds.bottom() + gap, buttonWidth, buttonHeight);
+    }
+
+    UiRect addContactCancelButtonBounds() {
+        UiRect saveBounds = addContactSaveButtonBounds();
+        int gap = Math.max(4, Math.round(5 * scale));
+        return new UiRect(saveBounds.right() + gap, saveBounds.top, saveBounds.width, saveBounds.height);
     }
 
     UiRect callConnectButtonBounds() {
@@ -304,9 +375,28 @@ final class PhoneScreenLayout {
     }
 
     UiRect callHangupButtonBounds() {
-        UiRect connectBounds = callConnectButtonBounds();
-        int gap = Math.max(5, Math.round(6 * scale));
-        return new UiRect(connectBounds.right() + gap, connectBounds.top, connectBounds.width, connectBounds.height);
+        int buttonSize = Math.max(30, Math.round(36 * scale));
+        int buttonY = displayY + displayHeight - buttonSize - Math.round(66 * scale);
+        int centerX = displayX + (displayWidth / 2);
+        return new UiRect(centerX - buttonSize / 2, buttonY, buttonSize, buttonSize);
+    }
+
+    UiRect callMuteButtonBounds() {
+        int hangupSize = Math.max(30, Math.round(36 * scale));
+        int muteSize = Math.max(18, Math.round(22 * scale));
+        int buttonY = displayY + displayHeight - hangupSize - Math.round(66 * scale);
+        int centerX = displayX + (displayWidth / 2);
+        int gap = Math.max(10, Math.round(12 * scale));
+        return new UiRect(centerX - hangupSize / 2 - gap - muteSize, buttonY + (hangupSize - muteSize) / 2, muteSize, muteSize);
+    }
+
+    UiRect callSpeakerButtonBounds() {
+        int hangupSize = Math.max(30, Math.round(36 * scale));
+        int speakerSize = Math.max(18, Math.round(22 * scale));
+        int buttonY = displayY + displayHeight - hangupSize - Math.round(66 * scale);
+        int centerX = displayX + (displayWidth / 2);
+        int gap = Math.max(10, Math.round(12 * scale));
+        return new UiRect(centerX + hangupSize / 2 + gap, buttonY + (hangupSize - speakerSize) / 2, speakerSize, speakerSize);
     }
 
     UiRect cameraPreviewBounds() {
