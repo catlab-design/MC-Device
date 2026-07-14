@@ -326,12 +326,6 @@ public final class AtmScreen extends AbstractContainerScreen<AtmMenu> {
 
     @Override
     public boolean charTyped(char codePoint, int modifiers) {
-        if (currentPage == Page.SET_PIN || currentPage == Page.ENTER_PIN) {
-            if (codePoint >= '0' && codePoint <= '9') {
-                onKeyPress(String.valueOf(codePoint));
-                return true;
-            }
-        }
         return super.charTyped(codePoint, modifiers);
     }
 

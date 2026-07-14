@@ -77,7 +77,7 @@ final class PhoneBankSurfaceRenderer {
         guiGraphics.fill(overlayLeft, footerTop,
                 overlayRight, cameraBounds.bottom(), OVERLAY_FILL);
 
-        drawCentered(guiGraphics, font, Component.literal("Scan to Pay"),
+        drawCentered(guiGraphics, font, Component.translatable("screen.minedevice.phone.bank.scan_title"),
                 cameraBounds.left,
                 cameraBounds.top + Math.round(headerHeight * 0.33F),
                 cameraBounds.width, TEXT_LIGHT, 0.48F);
@@ -86,13 +86,30 @@ final class PhoneBankSurfaceRenderer {
         int underlineY = cameraBounds.top + Math.round(headerHeight * 0.64F);
         guiGraphics.fill(underlineX, underlineY, underlineX + underlineWidth,
                 underlineY + Math.max(1, Math.round(1 * screen.scale)), 0xCCFFFFFF);
-        drawCentered(guiGraphics, font, Component.literal("Point at a receiving phone and click"),
+        drawCentered(guiGraphics, font, Component.translatable("screen.minedevice.phone.bank.scan_hint"),
                 cameraBounds.left,
                 footerTop + Math.max(8, Math.round(10 * screen.scale)),
-                cameraBounds.width, TEXT_LIGHT, 0.32F);
+                cameraBounds.width, TEXT_LIGHT, 0.4F, cameraBounds.width - 8);
 
-        drawScanFrame(guiGraphics, cameraBounds, headerHeight, footerHeight, screen.scale);
-        drawButton(guiGraphics, font, receiveBounds, Component.literal("QR Receive"), true, screen.scale);
+        drawScanFrame(guiGraphics, cameraBounds, headerHeight, footerHeight, screen.scale, screen.bankScanHoverTicks);
+        if (screen.bankScanHoverTicks > 0) {
+            int availableTop = cameraBounds.top + headerHeight + Math.max(18, Math.round(22 * screen.scale));
+            int availableBottom = cameraBounds.bottom() - footerHeight - Math.max(12, Math.round(14 * screen.scale));
+            int availableHeight = Math.max(24, availableBottom - availableTop);
+            int size = Math.min(cameraBounds.width - Math.max(28, Math.round(34 * screen.scale)),
+                    Math.min(availableHeight, Math.max(70, Math.round(92 * screen.scale))));
+            int left = cameraBounds.left + (cameraBounds.width - size) / 2;
+            int top = availableTop + Math.max(0, (availableHeight - size) / 2);
+            int right = left + size;
+            int bottom = top + size;
+            int thickness = Math.max(2, Math.round(2 * screen.scale));
+            float progress = screen.bankScanHoverTicks / (float) Math.max(1, PhoneScreen.BANK_SCAN_HOLD_TICKS);
+            int fillHeight = Math.round(size * progress);
+            guiGraphics.fill(left + thickness, bottom - fillHeight - thickness,
+                    right - thickness, bottom - thickness, 0x3306C755);
+        }
+        drawButton(guiGraphics, font, receiveBounds,
+                Component.translatable("screen.minedevice.phone.bank.receive_qr"), true, screen.scale);
         drawButton(guiGraphics, font, eyeBounds, Component.literal("\uD83D\uDC41"), true, screen.scale);
     }
 
@@ -169,18 +186,18 @@ final class PhoneBankSurfaceRenderer {
 
         drawCentered(guiGraphics, font, Component.translatable("screen.minedevice.phone.bank.receive_title"),
                 cardBounds.left, cardBounds.top + Math.max(7, Math.round(8 * screen.scale)),
-                cardBounds.width, TEXT_DARK, 0.34F);
+                cardBounds.width, TEXT_DARK, 0.45F);
 
         UiRect qrBounds = screen.getBankReceiveQrBounds();
         drawQr(guiGraphics, qrBounds);
         int numberTop = qrBounds.bottom() + Math.max(5, Math.round(6 * screen.scale));
         drawCentered(guiGraphics, font, Component.literal(screen.getOwnPhoneNumber()),
-                cardBounds.left, numberTop, cardBounds.width, TEXT_DARK, 0.38F);
-        int numberBottom = numberTop + PhoneScreenDraw.scaledTextHeight(font, 0.38F);
+                cardBounds.left, numberTop, cardBounds.width, TEXT_DARK, 0.5F);
+        int numberBottom = numberTop + PhoneScreenDraw.scaledTextHeight(font, 0.5F);
         int hintTop = Math.max(numberBottom + Math.max(8, Math.round(10 * screen.scale)),
                 cardBounds.bottom() - Math.max(15, Math.round(18 * screen.scale)));
         drawCentered(guiGraphics, font, Component.translatable("screen.minedevice.phone.bank.receive_hint"),
-                cardBounds.left, hintTop, cardBounds.width, TEXT_MUTED, 0.26F,
+                cardBounds.left, hintTop, cardBounds.width, TEXT_MUTED, 0.36F,
                 cardBounds.width - Math.max(10, Math.round(12 * screen.scale)));
 
         drawSecondaryButton(guiGraphics, font, screen.getBankCancelButtonBounds(),
@@ -253,7 +270,7 @@ final class PhoneBankSurfaceRenderer {
     }
 
     private static void drawScanFrame(GuiGraphics guiGraphics, UiRect cameraBounds,
-                                      int headerHeight, int footerHeight, float scale) {
+                                      int headerHeight, int footerHeight, float scale, int hoverTicks) {
         int availableTop = cameraBounds.top + headerHeight + Math.max(18, Math.round(22 * scale));
         int availableBottom = cameraBounds.bottom() - footerHeight - Math.max(12, Math.round(14 * scale));
         int availableHeight = Math.max(24, availableBottom - availableTop);
@@ -266,7 +283,7 @@ final class PhoneBankSurfaceRenderer {
         int cornerLength = Math.max(12, Math.round(17 * scale));
         int thickness = Math.max(2, Math.round(2 * scale));
         int shadow = 0x66000000;
-        int color = 0xEFFFFFFF;
+        int color = hoverTicks > 0 ? 0xFF06C755 : 0xEFFFFFFF;
 
         drawCorner(guiGraphics, left + 1, top + 1, cornerLength, thickness, true, true, shadow);
         drawCorner(guiGraphics, right - 1, top + 1, cornerLength, thickness, false, true, shadow);
@@ -372,14 +389,14 @@ final class PhoneBankSurfaceRenderer {
         }
 
         drawCentered(guiGraphics, font, label, bounds.left,
-                bounds.top + (bounds.height - PhoneScreenDraw.scaledTextHeight(font, 0.40F)) / 2,
-                bounds.width, TEXT_LIGHT, 0.40F);
+                bounds.top + (bounds.height - PhoneScreenDraw.scaledTextHeight(font, 0.5F)) / 2,
+                bounds.width, TEXT_LIGHT, 0.5F);
     }
 
     private static void drawField(GuiGraphics guiGraphics, Font font, UiRect bounds,
                                   Component label, Component value, float scale) {
         int labelWidth = Math.max(1, bounds.width - 6);
-        float labelScale = fitTextScale(font, label, labelWidth, 0.42F);
+        float labelScale = fitTextScale(font, label, labelWidth, 0.48F);
         PhoneScreenDraw.drawScaledText(guiGraphics, font, label,
                 bounds.left + 1, bounds.top, TEXT_MUTED, false, labelScale);
 
@@ -412,10 +429,10 @@ final class PhoneBankSurfaceRenderer {
 
     private static int drawSlipRow(GuiGraphics guiGraphics, Font font, int x, int y, int width,
                                    Component label, Component value, float scale) {
-        float labelScale = fitTextScale(font, label, width, 0.38F);
+        float labelScale = fitTextScale(font, label, width, 0.44F);
         PhoneScreenDraw.drawScaledText(guiGraphics, font, label, x, y, TEXT_MUTED, false, labelScale);
         int valueY = y + PhoneScreenDraw.scaledTextHeight(font, labelScale) + Math.max(1, Math.round(2 * scale));
-        float valueScale = fitTextScale(font, value, width, 0.46F);
+        float valueScale = fitTextScale(font, value, width, 0.52F);
         PhoneScreenDraw.drawScaledText(guiGraphics, font, value, x, valueY, TEXT_DARK, false, valueScale);
         return valueY + PhoneScreenDraw.scaledTextHeight(font, valueScale) + Math.max(5, Math.round(6 * scale));
     }
@@ -426,11 +443,11 @@ final class PhoneBankSurfaceRenderer {
                 ? Component.translatable("screen.minedevice.phone.bank.status.ready")
                 : screen.bankStatus;
         int maxWidth = contentBounds.width - Math.max(12, Math.round(14 * screen.scale));
-        int textHeight = PhoneScreenDraw.scaledTextHeight(font, 0.36F);
+        int textHeight = PhoneScreenDraw.scaledTextHeight(font, 0.42F);
         int top = Math.min(contentBounds.bottom() - textHeight - Math.max(24, Math.round(28 * screen.scale)),
                 afterY + Math.max(5, Math.round(6 * screen.scale)));
         drawCentered(guiGraphics, font, statusText, contentBounds.left, top,
-                contentBounds.width, TEXT_MUTED, 0.36F, maxWidth);
+                contentBounds.width, TEXT_MUTED, 0.42F, maxWidth);
     }
 
     private static Component amountText(PhoneScreen screen) {

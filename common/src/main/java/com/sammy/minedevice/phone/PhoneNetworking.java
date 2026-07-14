@@ -39,6 +39,7 @@ public final class PhoneNetworking {
     public static final ResourceLocation CHAT_MESSAGE_SEND = id("phone_chat_message_send");
     public static final ResourceLocation CHAT_DELETE = id("phone_chat_delete");
     public static final ResourceLocation CHAT_STATE_SYNC = id("phone_chat_state_sync");
+    public static final ResourceLocation CHAT_SET_NICKNAME = id("phone_chat_set_nickname");
     public static final ResourceLocation CHAT_TOAST = id("phone_chat_toast");
     public static final ResourceLocation CHAT_STATUS_TOAST = id("phone_chat_status_toast");
     public static final ResourceLocation CHAT_CONVERSATION_DELETED = id("phone_chat_conversation_deleted");
@@ -46,6 +47,11 @@ public final class PhoneNetworking {
     public static final ResourceLocation CONTACT_DELETE = id("phone_contact_delete");
     public static final ResourceLocation PHOTO_APPEND = id("phone_photo_append");
     public static final ResourceLocation PHOTO_DELETE = id("phone_photo_delete");
+    public static final ResourceLocation PHOTO_UPLOAD = id("phone_photo_upload");
+    public static final ResourceLocation PHOTO_REQUEST = id("phone_photo_request");
+    public static final ResourceLocation PHOTO_DATA = id("phone_photo_data");
+    public static final int PHOTO_CHUNK_SIZE = 16384;
+    public static final int PHOTO_MAX_BYTES = 6 * 1024 * 1024;
     public static final ResourceLocation CAMERA_POSE_UPDATE = id("phone_camera_pose_update");
     public static final ResourceLocation SCREEN_ON_UPDATE = id("phone_screen_on_update");
     public static final ResourceLocation BANK_SYNC_REQUEST = id("phone_bank_sync_request");
@@ -55,6 +61,8 @@ public final class PhoneNetworking {
     public static final ResourceLocation BANK_SCAN_TARGET = id("phone_bank_scan_target");
     public static final ResourceLocation BANK_SCAN_RESULT = id("phone_bank_scan_result");
     public static final ResourceLocation BANK_TRANSFER_RECEIPT = id("phone_bank_transfer_receipt");
+    public static final ResourceLocation CALL_LOG_SYNC_REQUEST = id("phone_call_log_sync_request");
+    public static final ResourceLocation CALL_LOG_SYNC = id("phone_call_log_sync");
     private static final int CHAT_STATUS_TOAST_LABEL_LENGTH = PhoneData.MAX_CONTACT_NAME_LENGTH + PhoneData.PHONE_NUMBER_LENGTH + 4;
     private static final double BANK_SCAN_MAX_DISTANCE_SQR = 12.0D * 12.0D;
     private static final Set<UUID> ACTIVE_BANK_RECEIVERS = ConcurrentHashMap.newKeySet();
@@ -154,9 +162,32 @@ public final class PhoneNetworking {
             });
         });
 
+        NetworkManager.registerReceiver(NetworkManager.c2s(), CALL_LOG_SYNC_REQUEST, (buf, context) -> {
+            context.queue(() -> {
+                ServerPlayer player = (ServerPlayer) context.getPlayer();
+                List<CallLogEntry> entries = CallLogStorageManager.getEntries(player.getUUID(), 30);
+                FriendlyByteBuf responseBuf = new FriendlyByteBuf(Unpooled.buffer());
+                writeHomePhoneContext(responseBuf, null);
+                responseBuf.writeInt(entries.size());
+                for (CallLogEntry entry : entries) {
+                    responseBuf.writeUtf(entry.otherNumber(), PhoneData.PHONE_NUMBER_LENGTH);
+                    responseBuf.writeUtf(entry.otherName() == null ? "" : entry.otherName(), PhoneData.MAX_CONTACT_NAME_LENGTH);
+                    responseBuf.writeUtf(entry.callType(), 16);
+                    responseBuf.writeLong(entry.timestamp());
+                    responseBuf.writeInt(entry.durationTicks());
+                }
+                NetworkManager.sendToPlayer(player, CALL_LOG_SYNC, responseBuf);
+            });
+        });
+
         NetworkManager.registerReceiver(NetworkManager.c2s(), CHAT_FRIEND_ADD, (buf, context) -> {
             String number = buf.readUtf(PhoneData.PHONE_NUMBER_LENGTH);
             context.queue(() -> addChatFriend((ServerPlayer) context.getPlayer(), number));
+        });
+
+        NetworkManager.registerReceiver(NetworkManager.c2s(), CHAT_SET_NICKNAME, (buf, context) -> {
+            String nickname = buf.readUtf(PhoneData.MAX_CONTACT_NAME_LENGTH);
+            context.queue(() -> setOwnNickname((ServerPlayer) context.getPlayer(), nickname));
         });
 
         NetworkManager.registerReceiver(NetworkManager.c2s(), CHAT_MESSAGE_SEND, (buf, context) -> {
@@ -197,6 +228,25 @@ public final class PhoneNetworking {
             context.queue(() -> deletePhonePhoto((ServerPlayer) context.getPlayer(), preferredHand, fileName));
         });
 
+        NetworkManager.registerReceiver(NetworkManager.c2s(), PHOTO_UPLOAD, (buf, context) -> {
+            String fileName = buf.readUtf(PhonePhotoData.MAX_PHOTO_FILE_NAME_LENGTH);
+            int totalChunks = buf.readVarInt();
+            int chunkIndex = buf.readVarInt();
+            byte[] chunk = buf.readByteArray(PHOTO_CHUNK_SIZE + 64);
+            context.queue(() -> {
+                ServerPlayer player = (ServerPlayer) context.getPlayer();
+                if (player != null) {
+                    PhonePhotoServerStore.acceptUploadChunk(player.getServer(), player.getUUID(),
+                            fileName, totalChunks, chunkIndex, chunk);
+                }
+            });
+        });
+
+        NetworkManager.registerReceiver(NetworkManager.c2s(), PHOTO_REQUEST, (buf, context) -> {
+            String fileName = buf.readUtf(PhonePhotoData.MAX_PHOTO_FILE_NAME_LENGTH);
+            context.queue(() -> sendPhotoData((ServerPlayer) context.getPlayer(), fileName));
+        });
+
         NetworkManager.registerReceiver(NetworkManager.c2s(), CAMERA_POSE_UPDATE, (buf, context) -> {
             boolean active = buf.readBoolean();
             boolean selfie = buf.readBoolean();
@@ -219,7 +269,8 @@ public final class PhoneNetworking {
 
         NetworkManager.registerReceiver(NetworkManager.c2s(), BANK_RECEIVE_STATE, (buf, context) -> {
             boolean active = buf.readBoolean();
-            context.queue(() -> setBankReceiveState((ServerPlayer) context.getPlayer(), active));
+            boolean chat = buf.readableBytes() > 0 && buf.readBoolean();
+            context.queue(() -> setBankReceiveState((ServerPlayer) context.getPlayer(), active, chat));
         });
 
         NetworkManager.registerReceiver(NetworkManager.c2s(), BANK_SCAN_TARGET, (buf, context) -> {
@@ -230,6 +281,9 @@ public final class PhoneNetworking {
         PlayerEvent.PLAYER_JOIN.register(player -> {
             PhoneCallManager.syncPlayer(player);
             syncChatState(player);
+            if (ChatStorageManager.isAvailable()) {
+                ChatStorageManager.getInstance().updateFriendProfileId(player.getUUID(), PhoneData.getPhoneNumber(player));
+            }
         });
         TickEvent.SERVER_PRE.register(server -> {
             pruneBankReceivers(server);
@@ -341,9 +395,22 @@ public final class PhoneNetworking {
         FriendlyByteBuf buf = new FriendlyByteBuf(Unpooled.buffer());
         PhoneChatStatePayload payload = ChatStorageManager.isAvailable()
                 ? ChatStorageManager.getInstance().createPayload(player.getUUID())
-                : new PhoneChatStatePayload(List.of(), List.of());
+                : new PhoneChatStatePayload("", List.of(), List.of());
         payload.write(buf);
         NetworkManager.sendToPlayer(player, CHAT_STATE_SYNC, buf);
+    }
+
+    private static void setOwnNickname(ServerPlayer player, String nickname) {
+        if (player == null || nickname == null) {
+            return;
+        }
+        if (nickname.length() > PhoneData.MAX_CONTACT_NAME_LENGTH) {
+            nickname = nickname.substring(0, PhoneData.MAX_CONTACT_NAME_LENGTH);
+        }
+        if (ChatStorageManager.isAvailable()) {
+            ChatStorageManager.getInstance().setOwnNickname(player.getUUID(), nickname);
+            syncChatState(player);
+        }
     }
 
     public static void sendBankState(ServerPlayer player) {
@@ -397,17 +464,19 @@ public final class PhoneNetworking {
         NetworkManager.sendToPlayer(sender, BANK_TRANSFER_RECEIPT, buf);
     }
 
-    private static void setBankReceiveState(ServerPlayer player, boolean active) {
+    private static void setBankReceiveState(ServerPlayer player, boolean active, boolean chat) {
         if (player == null) {
             return;
         }
 
         if (active && canUseMobileBank(player)) {
             ACTIVE_BANK_RECEIVERS.add(player.getUUID());
-            PhoneCallPoseAccess.setPhoneBankQrPoseActive(player, true);
+            PhoneCallPoseAccess.setPhoneBankQrPoseActive(player, !chat);
+            PhoneCallPoseAccess.setPhoneChatQrPoseActive(player, chat);
         } else {
             ACTIVE_BANK_RECEIVERS.remove(player.getUUID());
             PhoneCallPoseAccess.setPhoneBankQrPoseActive(player, false);
+            PhoneCallPoseAccess.setPhoneChatQrPoseActive(player, false);
         }
     }
 
@@ -447,6 +516,7 @@ public final class PhoneNetworking {
 
             if (!canUseMobileBank(player)) {
                 PhoneCallPoseAccess.setPhoneBankQrPoseActive(player, false);
+                PhoneCallPoseAccess.setPhoneChatQrPoseActive(player, false);
                 return true;
             }
 
@@ -627,6 +697,41 @@ public final class PhoneNetworking {
 
         if (PhonePhotoData.removePhotoByFileName(phoneStack, photoFileName)) {
             PhoneData.markDirty(player);
+            PhonePhotoServerStore.delete(player.getServer(), photoFileName);
+        }
+    }
+
+    /** Streams a stored photo's bytes back to a requesting client in chunks. */
+    private static void sendPhotoData(ServerPlayer player, String fileName) {
+        if (player == null || !PhonePhotoServerStore.isValidFileName(fileName)) {
+            return;
+        }
+
+        byte[] bytes = PhonePhotoServerStore.read(player.getServer(), fileName);
+        if (bytes == null || bytes.length == 0) {
+            // Signal "not found" with a zero-chunk header so the client can stop waiting.
+            FriendlyByteBuf buf = new FriendlyByteBuf(Unpooled.buffer());
+            buf.writeUtf(fileName, PhonePhotoData.MAX_PHOTO_FILE_NAME_LENGTH);
+            buf.writeVarInt(0);
+            buf.writeVarInt(0);
+            buf.writeByteArray(new byte[0]);
+            NetworkManager.sendToPlayer(player, PHOTO_DATA, buf);
+            return;
+        }
+
+        int totalChunks = Math.max(1, (bytes.length + PHOTO_CHUNK_SIZE - 1) / PHOTO_CHUNK_SIZE);
+        for (int chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
+            int start = chunkIndex * PHOTO_CHUNK_SIZE;
+            int length = Math.min(PHOTO_CHUNK_SIZE, bytes.length - start);
+            byte[] chunk = new byte[length];
+            System.arraycopy(bytes, start, chunk, 0, length);
+
+            FriendlyByteBuf buf = new FriendlyByteBuf(Unpooled.buffer());
+            buf.writeUtf(fileName, PhonePhotoData.MAX_PHOTO_FILE_NAME_LENGTH);
+            buf.writeVarInt(totalChunks);
+            buf.writeVarInt(chunkIndex);
+            buf.writeByteArray(chunk);
+            NetworkManager.sendToPlayer(player, PHOTO_DATA, buf);
         }
     }
 
@@ -676,13 +781,17 @@ public final class PhoneNetworking {
         }
 
         ServerPlayer target = PhoneCallManager.findOnlineByNumber(player.getServer(), number);
-        if (target == null || !PhoneData.hasPhone(target)) {
-            sendChatStatusToast(player, false, number, number);
-            return;
+        String resolvedName = number;
+        UUID targetUuid = null;
+        if (target != null) {
+            if (ChatStorageManager.isAvailable()) {
+                resolvedName = ChatStorageManager.getInstance().getOwnNickname(target.getUUID());
+            }
+            if (resolvedName == null || resolvedName.isBlank()) {
+                resolvedName = target.getGameProfile().getName();
+            }
+            targetUuid = target.getUUID();
         }
-
-        String resolvedName = target.getGameProfile().getName();
-        UUID targetUuid = target.getUUID();
         if (PhoneChatData.addFriend(ItemStack.EMPTY, resolvedName, number, targetUuid, player)) {
             syncChatState(player);
             sendChatStatusToast(player, true, number, formatChatLabel(resolvedName, number));
@@ -725,8 +834,14 @@ public final class PhoneNetworking {
         ServerPlayer receiver = PhoneCallManager.findOnlineByNumber(sender.getServer(), number);
         UUID receiverProfileId = receiver == null ? PhoneChatData.getFriendProfileId(ItemStack.EMPTY, number, sender) : receiver.getUUID();
         if (receiverProfileId == null) {
-            sender.sendSystemMessage(Component.translatable("screen.minedevice.phone.chat.error.unavailable", number));
-            return;
+            String friendName = receiver == null
+                    ? PhoneChatData.getFriendName(ItemStack.EMPTY, number, sender)
+                    : receiver.getGameProfile().getName();
+            if (friendName == null || friendName.isBlank()) {
+                sender.sendSystemMessage(Component.translatable("screen.minedevice.phone.chat.error.unavailable", number));
+                return;
+            }
+            receiverProfileId = UUID.nameUUIDFromBytes(number.getBytes(java.nio.charset.StandardCharsets.UTF_8));
         }
 
         String receiverName = receiver == null
@@ -744,18 +859,6 @@ public final class PhoneNetworking {
         }
 
         syncChatState(sender);
-        sender.sendSystemMessage(Component.translatable("screen.minedevice.phone.status.chat_sent"));
-        sendPhoneToast(sender,
-                Component.translatable("toast.minedevice.phone.chat.sent.title"),
-                Component.translatable("toast.minedevice.phone.chat.sent.body",
-                        Component.literal(formatChatLabel(receiverName, number)),
-                        message));
-        if (receiver != null && PhoneData.hasPhone(receiver)) {
-            receiver.sendSystemMessage(Component.translatable(
-                    "screen.minedevice.phone.chat.status.incoming_from",
-                    senderName,
-                    ownNumber));
-        }
     }
 
     private static void deleteChatConversation(ServerPlayer player, String rawNumber) {

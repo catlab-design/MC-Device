@@ -6,16 +6,18 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-public record PhoneChatStatePayload(List<FriendEntry> friends, List<ConversationEntry> conversations) {
+public record PhoneChatStatePayload(String ownNickname, List<FriendEntry> friends, List<ConversationEntry> conversations) {
     private static final int MAX_SYNCED_FRIENDS = 64;
     private static final int MAX_SYNCED_CONVERSATIONS = 64;
 
     public PhoneChatStatePayload {
+        ownNickname = ownNickname == null ? "" : ownNickname;
         friends = friends == null ? List.of() : List.copyOf(friends);
         conversations = conversations == null ? List.of() : List.copyOf(conversations);
     }
 
     public void write(FriendlyByteBuf buf) {
+        buf.writeUtf(ownNickname, PhoneData.MAX_CONTACT_NAME_LENGTH);
         List<FriendEntry> safeFriends = friends.size() > MAX_SYNCED_FRIENDS
                 ? friends.subList(0, MAX_SYNCED_FRIENDS)
                 : friends;
@@ -35,6 +37,7 @@ public record PhoneChatStatePayload(List<FriendEntry> friends, List<Conversation
     }
 
     public static PhoneChatStatePayload read(FriendlyByteBuf buf) {
+        String ownNickname = buf.readUtf(PhoneData.MAX_CONTACT_NAME_LENGTH);
         int friendCount = Math.min(buf.readVarInt(), MAX_SYNCED_FRIENDS);
         List<FriendEntry> friends = new ArrayList<>(friendCount);
         for (int i = 0; i < friendCount; i++) {
@@ -47,7 +50,7 @@ public record PhoneChatStatePayload(List<FriendEntry> friends, List<Conversation
             conversations.add(ConversationEntry.read(buf));
         }
 
-        return new PhoneChatStatePayload(friends, conversations);
+        return new PhoneChatStatePayload(ownNickname, friends, conversations);
     }
 
     public record FriendEntry(String displayName, String number, UUID profileId) {

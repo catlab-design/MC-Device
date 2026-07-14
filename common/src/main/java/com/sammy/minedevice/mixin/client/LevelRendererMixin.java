@@ -4,8 +4,10 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.sammy.minedevice.ModBlocks;
 import com.sammy.minedevice.block.HomePhoneBlock;
+import com.sammy.minedevice.block.LabtopBlock;
 import com.sammy.minedevice.client.airstrike.AirstrikeClientState;
 import com.sammy.minedevice.client.render.HomePhoneOutlineRenderer;
+import com.sammy.minedevice.client.render.LabtopOutlineRenderer;
 import com.sammy.minedevice.client.render.AirstrikeTargetRenderer;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.Camera;
@@ -28,19 +30,31 @@ public abstract class LevelRendererMixin {
     private void minedevice$renderHomePhoneOutline(PoseStack poseStack, VertexConsumer vertexConsumer,
                                                    Entity entity, double cameraX, double cameraY, double cameraZ,
                                                    BlockPos blockPos, BlockState blockState, CallbackInfo ci) {
-        if (!blockState.is(ModBlocks.HOME_PHONE.get())) {
+        if (blockState.is(ModBlocks.HOME_PHONE.get())) {
+            HomePhoneOutlineRenderer.render(
+                    poseStack,
+                    vertexConsumer,
+                    blockPos,
+                    blockState.getValue(HomePhoneBlock.FACING),
+                    cameraX,
+                    cameraY,
+                    cameraZ);
+            ci.cancel();
             return;
         }
 
-        HomePhoneOutlineRenderer.render(
-                poseStack,
-                vertexConsumer,
-                blockPos,
-                blockState.getValue(HomePhoneBlock.FACING),
-                cameraX,
-                cameraY,
-                cameraZ);
-        ci.cancel();
+        if (blockState.is(ModBlocks.LABTOP.get())) {
+            LabtopOutlineRenderer.render(
+                    poseStack,
+                    vertexConsumer,
+                    blockPos,
+                    blockState.getValue(LabtopBlock.FACING),
+                    blockState.getValue(LabtopBlock.MONITOR_OPEN),
+                    cameraX,
+                    cameraY,
+                    cameraZ);
+            ci.cancel();
+        }
     }
 
     @Inject(method = "renderLevel", at = @At("TAIL"))

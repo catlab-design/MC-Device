@@ -5,6 +5,7 @@ import com.sammy.minedevice.block.entity.HomePhoneBlockEntity;
 import com.sammy.minedevice.client.homephone.HomePhoneDialingSound;
 import com.sammy.minedevice.client.homephone.HomePhoneRingSound;
 import com.sammy.minedevice.homephone.HomePhoneRingState;
+import com.sammy.minedevice.phone.CallLogEntry;
 import com.sammy.minedevice.phone.PhoneCallState;
 import com.sammy.minedevice.phone.PhoneData;
 import com.sammy.minedevice.phone.PhoneNetworking;
@@ -22,6 +23,8 @@ import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.entity.player.Player;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 import java.util.HashMap;
@@ -39,6 +42,9 @@ public final class PhoneNetworkingClient {
     private static boolean cameraPoseInitialized;
     private static boolean lastScreenOnActive;
     private static boolean screenOnInitialized;
+    // Server-backed photo transfer state.
+    private static final Set<String> requestedPhotos = new java.util.HashSet<>();
+    private static final Map<String, PhotoDownload> photoDownloads = new HashMap<>();
 
     private PhoneNetworkingClient() {
     }
@@ -87,11 +93,37 @@ public final class PhoneNetworkingClient {
             });
         });
 
+        NetworkManager.registerReceiver(NetworkManager.s2c(), PhoneNetworking.CALL_LOG_SYNC, (buf, context) -> {
+            buf.readBoolean(); // homePhone
+            int count = buf.readInt();
+            List<CallLogEntry> entries = new ArrayList<>(count);
+            for (int i = 0; i < count; i++) {
+                String number = buf.readUtf(PhoneData.PHONE_NUMBER_LENGTH);
+                String name = buf.readUtf(PhoneData.MAX_CONTACT_NAME_LENGTH);
+                String type = buf.readUtf(16);
+                long timestamp = buf.readLong();
+                int duration = buf.readInt();
+                entries.add(new CallLogEntry(0L, number, name, type, timestamp, duration));
+            }
+            context.queue(() -> PhoneClientCallState.setCallLogEntries(entries));
+        });
+
         NetworkManager.registerReceiver(NetworkManager.s2c(), PhoneNetworking.CHAT_TOAST, (buf, context) -> {
             String senderName = buf.readUtf(PhoneData.MAX_CONTACT_NAME_LENGTH);
             String senderNumber = buf.readUtf(PhoneData.PHONE_NUMBER_LENGTH);
             String messagePreview = buf.readUtf(com.sammy.minedevice.phone.PhoneChatData.MAX_MESSAGE_LENGTH);
             context.queue(() -> {
+                net.minecraft.client.gui.screens.Screen currentScreen = Minecraft.getInstance().screen;
+                if (currentScreen instanceof PhoneScreen phoneScreen) {
+                    if (phoneScreen.chatThreadMode && phoneScreen.activeChatNumber != null) {
+                        String normSender = PhoneData.normalizePhoneNumber(senderNumber);
+                        String normActive = PhoneData.normalizePhoneNumber(phoneScreen.activeChatNumber);
+                        if (normSender.equals(normActive)) {
+                            return;
+                        }
+                    }
+                }
+
                 Component senderLabel = senderName.isBlank()
                         ? Component.literal(senderNumber)
                         : Component.literal(senderName);
@@ -99,6 +131,14 @@ public final class PhoneNetworkingClient {
                         Component.translatable("toast.minedevice.phone.chat.title"),
                         Component.translatable("toast.minedevice.phone.chat.body", senderLabel, messagePreview)
                 );
+
+                if (Minecraft.getInstance().player != null) {
+                    Minecraft.getInstance().player.sendSystemMessage(Component.translatable(
+                            "screen.minedevice.phone.chat.status.incoming_from",
+                            senderLabel,
+                            senderNumber
+                    ));
+                }
             });
         });
 
@@ -133,6 +173,14 @@ public final class PhoneNetworkingClient {
             Component title = buf.readComponent();
             Component message = buf.readComponent();
             context.queue(() -> showPhoneToast(title, message));
+        });
+
+        NetworkManager.registerReceiver(NetworkManager.s2c(), PhoneNetworking.PHOTO_DATA, (buf, context) -> {
+            String fileName = buf.readUtf(com.sammy.minedevice.phone.PhonePhotoData.MAX_PHOTO_FILE_NAME_LENGTH);
+            int totalChunks = buf.readVarInt();
+            int chunkIndex = buf.readVarInt();
+            byte[] chunk = buf.readByteArray(PhoneNetworking.PHOTO_CHUNK_SIZE + 64);
+            context.queue(() -> handlePhotoData(fileName, totalChunks, chunkIndex, chunk));
         });
 
         NetworkManager.registerReceiver(NetworkManager.s2c(), PhoneNetworking.CHAT_CONVERSATION_DELETED, (buf, context) -> {
@@ -294,6 +342,14 @@ public final class PhoneNetworkingClient {
         sendWithoutPayload(PhoneNetworking.CALL_MUTE_TOGGLE, homePhonePos);
     }
 
+    public static void requestCallLogSync() {
+        sendWithoutPayload(PhoneNetworking.CALL_LOG_SYNC_REQUEST, null);
+    }
+
+    public static void requestCallLogSync(BlockPos homePhonePos) {
+        sendWithoutPayload(PhoneNetworking.CALL_LOG_SYNC_REQUEST, homePhonePos);
+    }
+
     public static void requestSaveContact(String number, String suggestedName) {
         sendContactMutation(PhoneNetworking.CONTACT_SAVE, number, suggestedName, null);
     }
@@ -314,6 +370,12 @@ public final class PhoneNetworkingClient {
         FriendlyByteBuf buf = new FriendlyByteBuf(Unpooled.buffer());
         buf.writeUtf(PhoneData.normalizePhoneNumber(number), PhoneData.PHONE_NUMBER_LENGTH);
         NetworkManager.sendToServer(PhoneNetworking.CHAT_FRIEND_ADD, buf);
+    }
+
+    public static void requestSetNickname(String nickname) {
+        FriendlyByteBuf buf = new FriendlyByteBuf(Unpooled.buffer());
+        buf.writeUtf(nickname == null ? "" : nickname, PhoneData.MAX_CONTACT_NAME_LENGTH);
+        NetworkManager.sendToServer(PhoneNetworking.CHAT_SET_NICKNAME, buf);
     }
 
     public static void requestDeleteChatConversation(String number) {
@@ -344,6 +406,77 @@ public final class PhoneNetworkingClient {
         NetworkManager.sendToServer(PhoneNetworking.PHOTO_DELETE, buf);
     }
 
+    /** Uploads a locally-saved photo's bytes to the server so others who hold the phone can see it. */
+    public static void uploadPhoto(String fileName) {
+        if (fileName == null || fileName.isBlank()) {
+            return;
+        }
+        byte[] bytes = PhonePhotoStore.readLocalPhotoBytes(fileName);
+        if (bytes == null || bytes.length == 0 || bytes.length > PhoneNetworking.PHOTO_MAX_BYTES) {
+            return;
+        }
+        int chunkSize = PhoneNetworking.PHOTO_CHUNK_SIZE;
+        int totalChunks = Math.max(1, (bytes.length + chunkSize - 1) / chunkSize);
+        for (int chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
+            int start = chunkIndex * chunkSize;
+            int length = Math.min(chunkSize, bytes.length - start);
+            byte[] chunk = new byte[length];
+            System.arraycopy(bytes, start, chunk, 0, length);
+
+            FriendlyByteBuf buf = new FriendlyByteBuf(Unpooled.buffer());
+            buf.writeUtf(fileName, com.sammy.minedevice.phone.PhonePhotoData.MAX_PHOTO_FILE_NAME_LENGTH);
+            buf.writeVarInt(totalChunks);
+            buf.writeVarInt(chunkIndex);
+            buf.writeByteArray(chunk);
+            NetworkManager.sendToServer(PhoneNetworking.PHOTO_UPLOAD, buf);
+        }
+        // Already local; no need to download it back.
+        requestedPhotos.add(fileName);
+    }
+
+    /** Asks the server for a photo we don't have locally. De-duplicated so it fires once per file. */
+    public static void requestPhotoDownload(String fileName) {
+        if (fileName == null || fileName.isBlank() || !requestedPhotos.add(fileName)) {
+            return;
+        }
+        FriendlyByteBuf buf = new FriendlyByteBuf(Unpooled.buffer());
+        buf.writeUtf(fileName, com.sammy.minedevice.phone.PhonePhotoData.MAX_PHOTO_FILE_NAME_LENGTH);
+        NetworkManager.sendToServer(PhoneNetworking.PHOTO_REQUEST, buf);
+    }
+
+    private static void handlePhotoData(String fileName, int totalChunks, int chunkIndex, byte[] chunk) {
+        if (fileName == null || fileName.isBlank()) {
+            return;
+        }
+        if (totalChunks <= 0) {
+            // Server has no such photo; stop tracking any partial download.
+            photoDownloads.remove(fileName);
+            return;
+        }
+
+        PhotoDownload download = photoDownloads.computeIfAbsent(fileName, k -> new PhotoDownload(totalChunks));
+        if (download.totalChunks != totalChunks || download.nextIndex != chunkIndex) {
+            photoDownloads.remove(fileName);
+            return;
+        }
+        download.data.writeBytes(chunk);
+        download.nextIndex++;
+        if (download.nextIndex >= totalChunks) {
+            photoDownloads.remove(fileName);
+            PhonePhotoStore.writeDownloadedPhoto(fileName, download.data.toByteArray());
+        }
+    }
+
+    private static final class PhotoDownload {
+        private final int totalChunks;
+        private final java.io.ByteArrayOutputStream data = new java.io.ByteArrayOutputStream();
+        private int nextIndex;
+
+        private PhotoDownload(int totalChunks) {
+            this.totalChunks = totalChunks;
+        }
+    }
+
     public static void requestBankSync() {
         NetworkManager.sendToServer(PhoneNetworking.BANK_SYNC_REQUEST, new FriendlyByteBuf(Unpooled.buffer()));
     }
@@ -356,8 +489,13 @@ public final class PhoneNetworkingClient {
     }
 
     public static void requestBankReceiveState(boolean active) {
+        requestBankReceiveState(active, false);
+    }
+
+    public static void requestBankReceiveState(boolean active, boolean chat) {
         FriendlyByteBuf buf = new FriendlyByteBuf(Unpooled.buffer());
         buf.writeBoolean(active);
+        buf.writeBoolean(chat);
         NetworkManager.sendToServer(PhoneNetworking.BANK_RECEIVE_STATE, buf);
     }
 

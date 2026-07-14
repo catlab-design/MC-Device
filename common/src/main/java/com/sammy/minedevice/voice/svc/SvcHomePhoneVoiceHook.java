@@ -28,8 +28,12 @@ import java.util.UUID;
 
 public final class SvcHomePhoneVoiceHook {
 
-    private static final short SPEAKER_OUTPUT_DISTANCE = Short.MAX_VALUE;
-    private static final double SPEAKER_INPUT_RANGE_SQR = Double.MAX_VALUE;
+    // A speakerphone is only heard by, and only picks up, players near the block —
+    // NOT the whole server. Previously these were Short/Double.MAX_VALUE, which made
+    // every call audible server-wide and pulled every player's mic into the call.
+    private static final short SPEAKER_OUTPUT_DISTANCE = 16;
+    private static final double SPEAKER_INPUT_RANGE = 8.0D;
+    private static final double SPEAKER_INPUT_RANGE_SQR = SPEAKER_INPUT_RANGE * SPEAKER_INPUT_RANGE;
 
     private static final Map<HomePhoneAddress, SpeakerBridge> ACTIVE_BRIDGES = new HashMap<>();
     private static final Map<UUID, PlayerBridge> ACTIVE_PLAYER_BRIDGES = new HashMap<>();

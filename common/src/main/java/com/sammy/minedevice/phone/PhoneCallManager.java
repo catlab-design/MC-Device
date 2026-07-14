@@ -465,6 +465,8 @@ public final class PhoneCallManager {
             return;
         }
 
+        recordCallLog(session);
+
         clearHomePhoneRinging(session);
         clearPlayerCallPoseFlags(session);
         clearHomePhoneSpeaker(session);
@@ -473,6 +475,31 @@ public final class PhoneCallManager {
         removeSession(session);
         syncPlayersIdle(session);
         syncEndpointForViewer(endpoint, viewer, null);
+    }
+
+    private static void recordCallLog(CallSession session) {
+        if (session.server == null) {
+            return;
+        }
+        boolean connected = session.state == PhoneCallState.CONNECTED;
+        String callerType = connected ? "OUTGOING" : "NO_ANSWER";
+        String calleeType = connected ? "INCOMING" : "MISSED";
+        int duration = connected ? (int) (session.server.getTickCount() - session.startTime) : 0;
+        if (session.caller instanceof PlayerEndpoint callerEp) {
+            CallLogStorageManager.addEntry(callerEp.playerId(), session.calleeNumber, session.calleeName, callerType, duration);
+        }
+        if (session.callee instanceof PlayerEndpoint calleeEp) {
+            CallLogStorageManager.addEntry(calleeEp.playerId(), session.callerNumber, session.callerName, calleeType, duration);
+        }
+    }
+
+    private static void recordMissedCallLog(CallSession session) {
+        if (session.server == null) {
+            return;
+        }
+        if (session.callee instanceof PlayerEndpoint calleeEp) {
+            CallLogStorageManager.addEntry(calleeEp.playerId(), session.callerNumber, session.callerName, "MISSED", 0);
+        }
     }
 
     private static Endpoint resolveTargetEndpoint(MinecraftServer server, String number) {
@@ -998,6 +1025,7 @@ public final class PhoneCallManager {
         for (CallSession session : sessionsToMiss) {
             session.state = PhoneCallState.MISSED;
             session.startTime = currentTick;
+            recordMissedCallLog(session);
             clearHomePhoneRinging(session);
             clearPlayerCallPoseFlags(session);
             clearHomePhoneSpeaker(session);

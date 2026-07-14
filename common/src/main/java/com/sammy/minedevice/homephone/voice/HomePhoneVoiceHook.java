@@ -39,9 +39,12 @@ import java.util.Set;
 import java.util.UUID;
 
 public final class HomePhoneVoiceHook {
-    private static final short SPEAKER_OUTPUT_DISTANCE = Short.MAX_VALUE;
+    // A speakerphone is only heard by, and only picks up, players near the block —
+    // NOT the whole server. Previously Short/Double.MAX_VALUE leaked calls server-wide.
+    private static final short SPEAKER_OUTPUT_DISTANCE = 16;
     private static final double SOURCE_LINE_DEFAULT_VOLUME = 1.0D;
-    private static final double SPEAKER_INPUT_RANGE_SQR = Double.MAX_VALUE;
+    private static final double SPEAKER_INPUT_RANGE = 8.0D;
+    private static final double SPEAKER_INPUT_RANGE_SQR = SPEAKER_INPUT_RANGE * SPEAKER_INPUT_RANGE;
     private static final String SOURCE_NAME_PREFIX = "Phone : ";
 
     private static final Map<HomePhoneAddress, SpeakerBridge> ACTIVE_BRIDGES = new HashMap<>();

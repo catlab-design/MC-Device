@@ -35,37 +35,33 @@ final class PhoneMediaSurfaceRenderer {
 
         guiGraphics.fill(displayLeft, displayTop, displayRight, displayBottom, 0xFFFFFFFF);
 
-        Component titleText = Component.translatable("screen.minedevice.phone.gallery.title");
+        Component titleText = Component.translatable("screen.minedevice.phone.gallery.title")
+                .append(Component.literal(" " + (screen.galleryPage + 1) + "/" + pageCount));
         int titleX = headerLeft + Math.round(6 * screen.scale);
         int titleY = headerTop + Math.round(7 * screen.scale);
 
-        int maxTitleWidth = Math.round((contentRight - contentLeft) * 0.6F);
+        UiRect importButton = screen.getGalleryImportButtonBounds();
+        int maxTitleWidth = Math.max(24, importButton.left - titleX - Math.max(4, Math.round(6 * screen.scale)));
         float titleScale = PhoneScreenDraw.textScaleToFit(minecraft.font, titleText, maxTitleWidth, 0.6F);
         titleScale = Math.min(titleScale, 1.25F);
         int titleHeight = PhoneScreenDraw.scaledTextHeight(minecraft.font, titleScale);
 
-        Component pageText = Component.literal((screen.galleryPage + 1) + " / " + pageCount);
-        float pageScale = PhoneScreenDraw.textScaleToFit(minecraft.font, pageText,
-                Math.round((contentRight - contentLeft) * 0.30F), 0.4F);
-        pageScale = Math.min(pageScale, 0.85F);
-        int scaledPageTextWidth = PhoneScreenDraw.scaledTextWidth(minecraft.font, pageText, pageScale);
-        int scaledPageTextHeight = PhoneScreenDraw.scaledTextHeight(minecraft.font, pageScale);
-        int pageChipX = headerRight - scaledPageTextWidth - Math.round(7 * screen.scale);
-        int pageChipY = titleY + titleHeight - scaledPageTextHeight - Math.round(0.5F * screen.scale);
-
-        int hintY = titleY + titleHeight + Math.max(5, Math.round(6 * screen.scale));
-        Component hintText = Component.translatable("screen.minedevice.phone.gallery.hint_open");
-        int hintMaxWidth = Math.max(28, headerRight - headerLeft - Math.round(14 * screen.scale));
-        float hintScale = PhoneScreenDraw.textScaleToFit(minecraft.font, hintText, hintMaxWidth);
-        hintScale = Math.min(hintScale, 0.85F);
         int headerBandBottom = Math.min(headerBottom,
-                hintY + PhoneScreenDraw.scaledTextHeight(minecraft.font, hintScale) + Math.max(6, Math.round(8 * screen.scale)));
+                titleY + titleHeight + Math.max(6, Math.round(8 * screen.scale)));
 
         guiGraphics.fill(headerLeft, headerTop, headerRight, headerBandBottom, 0xFF6C92F4);
 
         PhoneScreenDraw.drawScaledText(guiGraphics, minecraft.font, titleText, titleX, titleY, 0xFFFFFFFF, false, titleScale);
-        PhoneScreenDraw.drawScaledText(guiGraphics, minecraft.font, pageText, pageChipX, pageChipY, 0xFFF2F6FF, false, pageScale);
-        PhoneScreenDraw.drawScaledText(guiGraphics, minecraft.font, hintText, titleX, hintY, 0xFFE8EEFF, false, hintScale);
+
+        // Import-from-file button (top-right of the header band)
+        guiGraphics.fill(importButton.left, importButton.top, importButton.right(), importButton.bottom(), 0x40FFFFFF);
+        Component importText = Component.translatable("screen.minedevice.phone.gallery.import");
+        float importScale = Math.min(0.55F, PhoneScreenDraw.textScaleToFit(minecraft.font, importText, importButton.width - 4, 0.4F));
+        int importTextWidth = PhoneScreenDraw.scaledTextWidth(minecraft.font, importText, importScale);
+        int importTextHeight = PhoneScreenDraw.scaledTextHeight(minecraft.font, importScale);
+        PhoneScreenDraw.drawScaledText(guiGraphics, minecraft.font, importText,
+                importButton.left + (importButton.width - importTextWidth) / 2,
+                importButton.top + (importButton.height - importTextHeight) / 2, 0xFFFFFFFF, false, importScale);
 
         if (photos.isEmpty()) {
             Component emptyText = Component.translatable("screen.minedevice.phone.gallery.empty");
@@ -148,15 +144,25 @@ final class PhoneMediaSurfaceRenderer {
         guiGraphics.fill(displayLeft, displayTop, displayRight, displayBottom, 0xFF000000);
         guiGraphics.fill(contentLeft, contentTop, contentRight, headerBottom, 0xFF000000);
 
-        int deleteButtonSize = Math.round(24 * screen.scale);
-        int deleteButtonX = contentBounds.right() - deleteButtonSize - Math.round(6 * screen.scale);
+        UiRect exportButton = screen.getViewerExportButtonBounds();
         int titleX = contentLeft + Math.round(7 * screen.scale);
         int titleY = contentTop + Math.round(6 * screen.scale);
-        int maxTitleWidth = Math.max(24, deleteButtonX - titleX - Math.round(8 * screen.scale));
-        float titleScale = PhoneScreenDraw.textScaleToFit(minecraft.font, pageText, maxTitleWidth, 0.6F);
-        titleScale = Math.min(titleScale, 1.25F);
+        // Shrink instead of overflowing into the Save button when space is tight.
+        int maxTitleWidth = Math.max(24, exportButton.left - titleX - Math.round(8 * screen.scale));
+        float titleScale = PhoneScreenDraw.textScaleToFit(minecraft.font, pageText, maxTitleWidth, 0.45F);
+        titleScale = Math.min(titleScale, 1.0F);
 
         PhoneScreenDraw.drawScaledText(guiGraphics, minecraft.font, pageText, titleX, titleY, 0xFFFFFFFF, false, titleScale);
+
+        // Export (save-to-disk) button
+        guiGraphics.fill(exportButton.left, exportButton.top, exportButton.right(), exportButton.bottom(), 0x40FFFFFF);
+        Component exportText = Component.translatable("screen.minedevice.phone.gallery.export");
+        float exportScale = Math.min(0.55F, PhoneScreenDraw.textScaleToFit(minecraft.font, exportText, exportButton.width - 4, 0.4F));
+        int exportTextWidth = PhoneScreenDraw.scaledTextWidth(minecraft.font, exportText, exportScale);
+        int exportTextHeight = PhoneScreenDraw.scaledTextHeight(minecraft.font, exportScale);
+        PhoneScreenDraw.drawScaledText(guiGraphics, minecraft.font, exportText,
+                exportButton.left + (exportButton.width - exportTextWidth) / 2,
+                exportButton.top + (exportButton.height - exportTextHeight) / 2, 0xFFFFFFFF, false, exportScale);
 
         guiGraphics.fill(viewerLayout.areaX, viewerLayout.areaY,
                 viewerLayout.areaX + viewerLayout.areaWidth, viewerLayout.areaY + viewerLayout.areaHeight, 0xFF000000);
@@ -196,7 +202,7 @@ final class PhoneMediaSurfaceRenderer {
             return;
         }
 
-        if (screen.isBankScanCameraActive()) {
+        if (screen.isBankScanCameraActive() || screen.isChatScanCameraMode()) {
             return;
         }
 

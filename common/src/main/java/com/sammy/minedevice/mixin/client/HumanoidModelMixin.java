@@ -99,7 +99,7 @@ public abstract class HumanoidModelMixin<T extends LivingEntity> {
             return;
         }
 
-        if (PhoneClientHooks.shouldUsePhoneQrModel(entity)) {
+        if (PhoneClientHooks.shouldUsePhoneQrModel(entity) || PhoneClientHooks.shouldUseChatQrModel(entity)) {
             raisedArm.x = -QR_ARM_X * side;
             raisedArm.z = QR_ARM_FORWARD_Z;
             raisedArm.xRot = Mth.clamp(head.xRot + QR_ARM_PITCH, -1.80F, 0.35F);

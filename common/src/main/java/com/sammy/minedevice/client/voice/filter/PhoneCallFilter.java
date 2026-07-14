@@ -34,6 +34,12 @@ public final class PhoneCallFilter implements AudioFilter {
             return samples;
         }
 
+        // Mute button: silence the outgoing mic while the player has muted the call.
+        if (com.sammy.minedevice.client.phone.PhoneClientCallState.isSelfMuted()) {
+            java.util.Arrays.fill(samples, (short) 0);
+            return samples;
+        }
+
         int channels = Math.max(1, context.getChannels());
         ensureState(context, channels);
 

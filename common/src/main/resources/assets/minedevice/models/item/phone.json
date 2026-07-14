@@ -9,6 +9,12 @@
     },
     {
       "predicate": {
+        "minedevice:chat_qr": 1.0
+      },
+      "model": "minedevice:item/phone_3d_qr_chat"
+    },
+    {
+      "predicate": {
         "minedevice:screen_on": 1.0
       },
       "model": "minedevice:item/phone_3d_on"

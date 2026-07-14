@@ -220,6 +220,13 @@ public final class ChatCache {
         }
     }
 
+    public void updateCachedFriendProfileId(UUID playerUuid, String phoneNumber) {
+        String normNumber = PhoneData.normalizePhoneNumber(phoneNumber);
+        for (PlayerCache playerCache : playerCaches.values()) {
+            playerCache.updateFriendProfileIdIfNull(normNumber, playerUuid);
+        }
+    }
+
     public void clearCacheForPlayer(UUID ownerUuid) {
         if (ownerUuid != null) {
             playerCaches.remove(ownerUuid);
@@ -376,6 +383,15 @@ public final class ChatCache {
         synchronized void removeFriend(String otherNumber) {
             touch();
             friendsByNumber.remove(PhoneData.normalizePhoneNumber(otherNumber));
+        }
+
+        synchronized void updateFriendProfileIdIfNull(String friendNumber, UUID profileId) {
+            touch();
+            String normalizedNumber = PhoneData.normalizePhoneNumber(friendNumber);
+            FriendEntry existing = friendsByNumber.get(normalizedNumber);
+            if (existing != null && existing.profileId() == null) {
+                friendsByNumber.put(normalizedNumber, new FriendEntry(existing.displayName(), normalizedNumber, profileId));
+            }
         }
 
         synchronized void removeConversation(String otherNumber) {

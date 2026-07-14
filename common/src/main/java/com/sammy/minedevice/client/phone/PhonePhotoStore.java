@@ -26,7 +26,7 @@ import java.util.Map;
 import java.util.Objects;
 
 final class PhonePhotoStore {
-    private static final int PHOTO_PREVIEW_SIZE = 200;
+    private static final int PHOTO_PREVIEW_SIZE = 512;
     private static final String PHOTO_DIRECTORY_NAME = "minedevice_phone";
 
     private final String modId;
@@ -64,6 +64,45 @@ final class PhonePhotoStore {
         } catch (Exception exception) {
             Minedevice.LOGGER.debug("Failed to write phone photo", exception);
             return null;
+        }
+    }
+
+    /** Reads an external image file and stores a copy in the phone photo directory. Returns the new file name or null. */
+    String importImageFile(Path source) {
+        if (source == null || !Files.exists(source)) {
+            return null;
+        }
+        try (InputStream inputStream = Files.newInputStream(source)) {
+            NativeImage image = NativeImage.read(inputStream);
+            try {
+                return writePhoto(image);
+            } finally {
+                image.close();
+            }
+        } catch (Exception exception) {
+            Minedevice.LOGGER.debug("Failed to import image: {}", source, exception);
+            return null;
+        }
+    }
+
+    /** Copies a stored photo out to an arbitrary destination chosen by the user. */
+    boolean exportPhotoFile(String fileName, Path destination) {
+        if (fileName == null || fileName.isEmpty() || destination == null) {
+            return false;
+        }
+        Path source = getPhotoDirectory().resolve(fileName);
+        if (!Files.exists(source)) {
+            return false;
+        }
+        try {
+            if (destination.getParent() != null) {
+                Files.createDirectories(destination.getParent());
+            }
+            Files.copy(source, destination, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            return true;
+        } catch (Exception exception) {
+            Minedevice.LOGGER.debug("Failed to export photo {} -> {}", fileName, destination, exception);
+            return false;
         }
     }
 
@@ -122,6 +161,9 @@ final class PhonePhotoStore {
 
         Path filePath = getPhotoDirectory().resolve(fileName);
         if (!Files.exists(filePath)) {
+            // Photo isn't on this machine (e.g. taken on another player's phone).
+            // Ask the server for it; it'll be written locally and picked up next frame.
+            PhoneNetworkingClient.requestPhotoDownload(fileName);
             return null;
         }
 
@@ -263,8 +305,39 @@ final class PhonePhotoStore {
     }
 
     private Path getPhotoDirectory() {
+        return photoDirectory();
+    }
+
+    static Path photoDirectory() {
         return Minecraft.getInstance().gameDirectory.toPath()
                 .resolve("screenshots")
                 .resolve(PHOTO_DIRECTORY_NAME);
+    }
+
+    /** Reads a locally-stored photo's raw bytes (for uploading to the server), or null. */
+    static byte[] readLocalPhotoBytes(String fileName) {
+        if (fileName == null || fileName.isBlank()) {
+            return null;
+        }
+        try {
+            Path path = photoDirectory().resolve(fileName);
+            return Files.exists(path) ? Files.readAllBytes(path) : null;
+        } catch (Exception exception) {
+            return null;
+        }
+    }
+
+    /** Writes a photo downloaded from the server into the local cache folder. */
+    static void writeDownloadedPhoto(String fileName, byte[] bytes) {
+        if (fileName == null || fileName.isBlank() || bytes == null || bytes.length == 0) {
+            return;
+        }
+        try {
+            Path dir = photoDirectory();
+            Files.createDirectories(dir);
+            Files.write(dir.resolve(fileName), bytes);
+        } catch (Exception exception) {
+            Minedevice.LOGGER.debug("Failed to write downloaded photo {}", fileName, exception);
+        }
     }
 }

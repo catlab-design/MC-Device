@@ -8,6 +8,8 @@ import com.sammy.minedevice.Minedevice;
 import com.sammy.minedevice.ModItems;
 import com.sammy.minedevice.block.entity.HomePhoneBlockEntity;
 import com.sammy.minedevice.item.PhoneItem;
+import com.sammy.minedevice.phone.CallLogEntry;
+import com.sammy.minedevice.phone.PhoneAppearanceData;
 import com.sammy.minedevice.phone.PhoneCallState;
 import com.sammy.minedevice.phone.PhoneChatData;
 import com.sammy.minedevice.phone.PhoneChatMessage;
@@ -33,6 +35,7 @@ import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
@@ -48,6 +51,7 @@ import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.HitResult;
 import org.lwjgl.glfw.GLFW;
+import org.lwjgl.glfw.GLFWDropCallback;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -96,6 +100,8 @@ public final class PhoneScreen extends Screen {
             "textures/gui/phone_gui/call_menu.png");
     static final ResourceLocation LIST_MENU_TEXTURE = new ResourceLocation(Minedevice.MOD_ID,
             "textures/gui/phone_gui/list_menu.png");
+    static final ResourceLocation TIME_BUTTON_TEXTURE = new ResourceLocation(Minedevice.MOD_ID,
+            "textures/gui/phone_gui/time_button.png");
     private static final ResourceLocation SHUTTER_BUTTON_TEXTURE = new ResourceLocation(Minedevice.MOD_ID,
             "textures/gui/phone_gui/shutter_button.png");
     private static final ResourceLocation CAMFLIP_BUTTON_TEXTURE = new ResourceLocation(Minedevice.MOD_ID,
@@ -108,14 +114,27 @@ public final class PhoneScreen extends Screen {
             "textures/gui/phone_gui/answer_button.png");
     static final ResourceLocation HANGUP_BUTTON_TEXTURE = new ResourceLocation(Minedevice.MOD_ID,
             "textures/gui/phone_gui/hangup_button.png");
+    static final ResourceLocation CALL_BUTTON_TEXTURE = new ResourceLocation(Minedevice.MOD_ID,
+            "textures/gui/phone_gui/call_button.png");
+    static final ResourceLocation MIC_ON_TEXTURE = new ResourceLocation(Minedevice.MOD_ID,
+            "textures/gui/phone_gui/microphone_on.png");
+    static final ResourceLocation MIC_OFF_TEXTURE = new ResourceLocation(Minedevice.MOD_ID,
+            "textures/gui/phone_gui/microphone_off.png");
+    static final ResourceLocation SPEAKER_ON_TEXTURE = new ResourceLocation(Minedevice.MOD_ID,
+            "textures/gui/phone_gui/speaker_on.png");
+    static final ResourceLocation SPEAKER_REDUCE_TEXTURE = new ResourceLocation(Minedevice.MOD_ID,
+            "textures/gui/phone_gui/speaker_reduce.png");
     static final ResourceLocation DEFAULT_BACKGROUND_TEXTURE = new ResourceLocation(Minedevice.MOD_ID,
             "textures/gui/wallpaper/default.png");
     private static final int FRAME_WIDTH = 160;
     private static final int FRAME_HEIGHT = 336;
     private static final float FRAME_SCALE = 0.85F;
-    private static final int DISPLAY_X = 12;
+    // Match the frame texture's horizontal screen opening (measured transparent span
+    // x 9..150) so every app fills the phone frame left-to-right. Kept 1px inside each
+    // edge (10..150) so the anti-aliased bezel edge doesn't show a white overflow line.
+    private static final int DISPLAY_X = 10;
     private static final int DISPLAY_Y = 24;
-    static final int DISPLAY_WIDTH = 136;
+    static final int DISPLAY_WIDTH = 140;
     static final int DISPLAY_HEIGHT = 292;
     private static final int UNLOCK_TEXTURE_SIZE = 24;
     private static final int CAMERA_VIEW_X = 9;
@@ -146,7 +165,7 @@ public final class PhoneScreen extends Screen {
     private static final float CAMERA_REAR_MAX_ZOOM_FACTOR = 4.0F;
     private static final float CAMERA_SELFIE_MAX_ZOOM_FACTOR = 3.0F;
     private static final int CAMERA_ZOOM_INDICATOR_TICKS = 30;
-    private static final int BANK_SCAN_HOLD_TICKS = 28;
+    static final int BANK_SCAN_HOLD_TICKS = 28;
     static final int BANK_PAGE_HOME = 0;
     static final int BANK_PAGE_TRANSFER = 1;
     static final int BANK_PAGE_SCAN = 2;
@@ -177,6 +196,20 @@ public final class PhoneScreen extends Screen {
     float photoZoom = 1.0F;
     boolean callAppMode;
     boolean callContactsMode;
+    boolean callRecentsMode;
+    int recentsScrollOffset;
+    int chatScrollOffset;
+    private int lastObservedMessageCount;
+    boolean chatAddSelectorMode;
+    int chatAddSelectorScrollOffset;
+    int chatTab;
+    boolean chatAddMenuOpen;
+    String chatNicknameDraft = "";
+    boolean chatNicknameEditMode;
+    boolean chatScanActive;
+    boolean chatQrShowMode;
+    int chatScanHoverTicks;
+    UUID chatScanHoverTargetId;
     boolean callSessionMode;
     boolean addContactMode;
     String addContactName = "";
@@ -211,8 +244,8 @@ public final class PhoneScreen extends Screen {
     int bankPage = BANK_PAGE_HOME;
     private boolean bankReceiveActive;
     private boolean closingForBankReceiveWorld;
-    private UUID bankScanHoverTargetId;
-    private int bankScanHoverTicks;
+    UUID bankScanHoverTargetId;
+    int bankScanHoverTicks;
     private int bankScanRequestCooldown;
     boolean activeCallIncoming;
     boolean activeCallConnected;
@@ -236,6 +269,7 @@ public final class PhoneScreen extends Screen {
     private final BlockPos homePhonePos;
     private final boolean homePhoneMode;
     private final boolean startBankReceivePage;
+    private final boolean startChatQrPage;
     private final PhonePhotoStore photoStore = new PhonePhotoStore(Minedevice.MOD_ID);
     private PhoneScreenLayout layoutState;
     private int callSyncCooldown;
@@ -246,23 +280,34 @@ public final class PhoneScreen extends Screen {
     // Wallpaper context menu state (gallery right-click)
     int wallpaperContextPhotoIndex = -1;
     boolean wallpaperContextMenuOpen;
-    // Settings wallpaper picker state
+    // Settings app navigation: 0 = category menu (Appearance/System), 1 = Appearance, 2 = System
+    int settingsPage;
+    boolean settingsColorPickerOpen;
+    boolean settingsNameEditMode;
+    String settingsNameDraft = "";
+    // Settings wallpaper picker state (nested inside the Appearance page)
     int settingsWallpaperPage; // 0 = main, 1 = pick lock, 2 = pick home
+    int settingsWallpaperScroll;
+    // External image drag & drop
+    private GLFWDropCallback ownDropCallback;
+    private GLFWDropCallback previousDropCallback;
+    private boolean dropCallbackInstalled;
 
     public PhoneScreen() {
         this(InteractionHand.MAIN_HAND);
     }
 
     public PhoneScreen(InteractionHand openHand) {
-        this(openHand, false);
+        this(openHand, false, false);
     }
 
-    private PhoneScreen(InteractionHand openHand, boolean startBankReceivePage) {
+    private PhoneScreen(InteractionHand openHand, boolean startBankReceivePage, boolean startChatQrPage) {
         super(Component.translatable("item.minedevice.phone"));
         this.openHand = openHand;
         this.homePhonePos = null;
         this.homePhoneMode = false;
         this.startBankReceivePage = startBankReceivePage;
+        this.startChatQrPage = startChatQrPage;
     }
 
     public PhoneScreen(BlockPos homePhonePos) {
@@ -271,12 +316,18 @@ public final class PhoneScreen extends Screen {
         this.homePhonePos = homePhonePos == null ? null : homePhonePos.immutable();
         this.homePhoneMode = this.homePhonePos != null;
         this.startBankReceivePage = false;
+        this.startChatQrPage = false;
         this.unlocked = true;
         this.callAppMode = true;
+        this.callRecentsMode = false;
     }
 
     static PhoneScreen bankReceiveScreen(InteractionHand openHand) {
-        return new PhoneScreen(openHand == null ? InteractionHand.MAIN_HAND : openHand, true);
+        return new PhoneScreen(openHand == null ? InteractionHand.MAIN_HAND : openHand, true, false);
+    }
+
+    static PhoneScreen chatQrScreen(InteractionHand openHand) {
+        return new PhoneScreen(openHand == null ? InteractionHand.MAIN_HAND : openHand, false, true);
     }
 
     @Override
@@ -285,8 +336,70 @@ public final class PhoneScreen extends Screen {
         rebuildWidgets();
         requestCallSync();
         applyCallStateFromServer();
+        installDropCallback();
         if (startBankReceivePage && !homePhoneMode) {
             openBankReceivePage();
+        }
+        if (startChatQrPage && !homePhoneMode) {
+            openChatQrPage();
+        }
+    }
+
+    private void installDropCallback() {
+        if (dropCallbackInstalled) {
+            return;
+        }
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft == null || minecraft.getWindow() == null) {
+            return;
+        }
+        long handle = minecraft.getWindow().getWindow();
+        ownDropCallback = GLFWDropCallback.create((window, count, names) -> {
+            List<Path> paths = new ArrayList<>();
+            for (int i = 0; i < count; i++) {
+                try {
+                    paths.add(Path.of(GLFWDropCallback.getName(names, i)));
+                } catch (Exception ignored) {
+                }
+            }
+            onFilesDropped(paths);
+        });
+        previousDropCallback = GLFW.glfwSetDropCallback(handle, ownDropCallback);
+        dropCallbackInstalled = true;
+    }
+
+    private void uninstallDropCallback() {
+        if (!dropCallbackInstalled) {
+            return;
+        }
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft != null && minecraft.getWindow() != null) {
+            GLFW.glfwSetDropCallback(minecraft.getWindow().getWindow(), previousDropCallback);
+        }
+        previousDropCallback = null;
+        if (ownDropCallback != null) {
+            ownDropCallback.free();
+            ownDropCallback = null;
+        }
+        dropCallbackInstalled = false;
+    }
+
+    private void onFilesDropped(List<Path> paths) {
+        Path image = null;
+        for (Path path : paths) {
+            if (PhoneImageIo.isSupportedImage(path)) {
+                image = path;
+                break;
+            }
+        }
+        if (image == null) {
+            showStatus("screen.minedevice.phone.status.import_failed");
+            return;
+        }
+        if (settingsAppMode) {
+            importWallpaperFromFile(image);
+        } else if (!homePhoneMode) {
+            importPhotoFromFile(image);
         }
     }
 
@@ -300,20 +413,34 @@ public final class PhoneScreen extends Screen {
         photoViewerMode = false;
         callAppMode = false;
         callContactsMode = false;
+        callRecentsMode = false;
         
-        callSessionMode = false;
         addContactMode = false;
         chatAppMode = false;
         chatThreadMode = false;
+        chatAddSelectorMode = false;
+        chatAddSelectorScrollOffset = 0;
+        chatTab = 0;
+        chatAddMenuOpen = false;
+        chatNicknameEditMode = false;
+        chatScanActive = false;
+        chatQrShowMode = false;
+        chatScanHoverTicks = 0;
+        chatScanHoverTargetId = null;
         bankAppMode = false;
         capturePending = false;
         captureFlashTicks = 0;
         galleryPage = 0;
         viewerPhotoIndex = -1;
         settingsAppMode = false;
+        settingsPage = 0;
+        settingsColorPickerOpen = false;
+        settingsNameEditMode = false;
+        settingsNameDraft = "";
         wallpaperContextMenuOpen = false;
         wallpaperContextPhotoIndex = -1;
         settingsWallpaperPage = 0;
+        settingsWallpaperScroll = 0;
         dialedNumber = "";
         activeCallNumber = "";
         activeCallName = "";
@@ -354,6 +481,7 @@ public final class PhoneScreen extends Screen {
         bankScanRequestCooldown = 0;
         setCameraMoveMode(false, 0.0D, 0.0D);
         releasePhotoTextures();
+        uninstallDropCallback();
         super.onClose();
     }
 
@@ -367,6 +495,8 @@ public final class PhoneScreen extends Screen {
             addCallSessionWidgets();
         } else if (callContactsMode) {
             addCallContactsWidgets();
+        } else if (callRecentsMode) {
+            addCallAppWidgets();
         } else if (callAppMode) {
             addCallAppWidgets();
         } else if (chatThreadMode) {
@@ -444,14 +574,19 @@ public final class PhoneScreen extends Screen {
         }
 
         boolean bankScanCameraMode = isBankScanCameraMode();
+        boolean chatScanCameraMode = chatAppMode && cameraMode && chatScanActive;
         if (cameraMode) {
             renderSurface(guiGraphics, partialTick);
             if (bankScanCameraMode) {
                 renderBankCameraOverlay(guiGraphics);
+            } else if (chatScanCameraMode) {
+                renderChatCameraOverlay(guiGraphics);
             }
             renderPhoneFrame(guiGraphics);
         } else {
-            if (callSessionMode || callAppMode || callContactsMode || addContactMode || chatAppMode || chatThreadMode || bankAppMode) {
+            guiGraphics.enableScissor(0, 0, this.width, displayY + displayHeight);
+
+            if (callSessionMode || callAppMode || callContactsMode || callRecentsMode || addContactMode || chatAppMode || chatThreadMode || bankAppMode) {
                 renderCallBackdrop(guiGraphics);
             } else if (galleryMode || photoViewerMode) {
                 renderMediaBackdrop(guiGraphics);
@@ -463,17 +598,27 @@ public final class PhoneScreen extends Screen {
                 int bgWidth = displayWidth + Math.round(12 * scale);
                 int bgHeight = displayHeight + Math.round(12 * scale);
 
-                ResourceLocation wallpaperTexture = resolveWallpaperTexture(false);
+                // Lock screen and home screen keep separate wallpapers.
+                boolean lockScreen = !unlocked;
+                ResourceLocation wallpaperTexture = resolveWallpaperTexture(lockScreen);
                 if (wallpaperTexture != null) {
                     guiGraphics.blit(wallpaperTexture, bgX, bgY, 0, 0, bgWidth, bgHeight,
                             DISPLAY_WIDTH, DISPLAY_HEIGHT);
                 } else {
-                    // Photo wallpaper — rendered in renderSurface
-                    guiGraphics.fill(bgX, bgY, bgX + bgWidth, bgY + bgHeight, 0xFF000000);
+                    String photoFile = getWallpaperPhotoFileName(lockScreen);
+                    PhotoTexture photoTexture = photoFile == null ? null : getOrLoadPhotoTexture(photoFile, false);
+                    if (photoTexture != null) {
+                        PhoneScreenDraw.drawTextureInArea(guiGraphics, photoTexture.textureId,
+                                photoTexture.width, photoTexture.height, bgX, bgY, bgWidth, bgHeight, 1.0F, false);
+                    } else {
+                        guiGraphics.fill(bgX, bgY, bgX + bgWidth, bgY + bgHeight, 0xFF000000);
+                    }
                 }
             }
 
             renderSurface(guiGraphics, partialTick);
+            guiGraphics.disableScissor();
+
             renderPhoneFrame(guiGraphics);
         }
         boolean hideWidgetsForCapture = cameraMode && capturePending;
@@ -494,7 +639,7 @@ public final class PhoneScreen extends Screen {
             guiGraphics.pose().popPose();
         }
 
-        if (cameraMode && !bankScanCameraMode) {
+        if (cameraMode && !bankScanCameraMode && !chatScanCameraMode) {
             renderCameraOverlayHints(guiGraphics);
         }
     }
@@ -522,6 +667,15 @@ public final class PhoneScreen extends Screen {
                 bankSyncCooldown--;
             }
         }
+        if (chatThreadMode) {
+            int currentCount = getActiveChatMessages().size();
+            if (currentCount != lastObservedMessageCount) {
+                chatScrollOffset = 0;
+                lastObservedMessageCount = currentCount;
+            }
+        } else {
+            lastObservedMessageCount = 0;
+        }
         applyCallStateFromServer();
         if (isCallScreenLocked()
                 && (cameraMode || galleryMode || photoViewerMode || callAppMode || callContactsMode
@@ -533,8 +687,11 @@ public final class PhoneScreen extends Screen {
             photoViewerMode = false;
             callAppMode = false;
             callContactsMode = false;
+            callRecentsMode = false;
             chatAppMode = false;
             chatThreadMode = false;
+            chatScanActive = false;
+            chatQrShowMode = false;
             bankAppMode = false;
             callSessionMode = true;
             rebuildWidgets();
@@ -564,6 +721,13 @@ public final class PhoneScreen extends Screen {
         } else {
             resetBankScanHover();
         }
+
+        if (chatAppMode && cameraMode && chatScanActive) {
+            tickChatScanHover();
+        } else {
+            chatScanHoverTargetId = null;
+            chatScanHoverTicks = 0;
+        }
     }
 
     @Override
@@ -578,6 +742,27 @@ public final class PhoneScreen extends Screen {
                 return true;
             }
             closeBankScanCamera();
+            return true;
+        }
+
+        if (isChatScanCameraMode() && keyCode == InputConstants.KEY_ESCAPE) {
+            if (cameraMoveMode) {
+                setCameraMoveMode(false, lastCameraMoveMouseX, lastCameraMoveMouseY);
+                return true;
+            }
+            closeChatScanCamera();
+            return true;
+        }
+
+        if (isChatScanCameraMode() && !cameraMoveMode && (keyCode == InputConstants.KEY_SPACE
+                || keyCode == InputConstants.KEY_RETURN
+                || keyCode == InputConstants.KEY_NUMPADENTER)) {
+            tryScanChatTarget();
+            return true;
+        }
+
+        if (chatAppMode && chatQrShowMode && keyCode == InputConstants.KEY_ESCAPE) {
+            closeChatQrPage();
             return true;
         }
 
@@ -627,6 +812,15 @@ public final class PhoneScreen extends Screen {
             return true;
         }
 
+        if (callRecentsMode && keyCode == InputConstants.KEY_ESCAPE) {
+            if (isCallScreenLocked()) {
+                closeScreenKeepCall();
+                return true;
+            }
+            openCallDialPage();
+            return true;
+        }
+
         if (callContactsMode && keyCode == InputConstants.KEY_ESCAPE) {
             if (isCallScreenLocked()) {
                 closeScreenKeepCall();
@@ -659,6 +853,21 @@ public final class PhoneScreen extends Screen {
         }
 
         if (chatAppMode && keyCode == InputConstants.KEY_ESCAPE) {
+            if (chatNicknameEditMode) {
+                chatNicknameEditMode = false;
+                rebuildWidgets();
+                return true;
+            }
+            if (chatAddSelectorMode) {
+                chatAddSelectorMode = false;
+                rebuildWidgets();
+                return true;
+            }
+            if (chatAddMenuOpen) {
+                chatAddMenuOpen = false;
+                rebuildWidgets();
+                return true;
+            }
             if (hasChatDeleteMenuOpen()) {
                 clearChatDeleteMenu();
                 return true;
@@ -677,13 +886,27 @@ public final class PhoneScreen extends Screen {
             return true;
         }
 
-        if (settingsAppMode && keyCode == InputConstants.KEY_ESCAPE) {
-            if (settingsWallpaperPage != 0) {
-                settingsWallpaperPage = 0;
+        if (settingsAppMode && settingsNameEditMode) {
+            if (keyCode == InputConstants.KEY_ESCAPE) {
+                settingsNameEditMode = false;
                 rebuildWidgets();
                 return true;
             }
-            closeSettingsApp();
+            if (keyCode == InputConstants.KEY_BACKSPACE) {
+                if (!settingsNameDraft.isEmpty()) {
+                    settingsNameDraft = settingsNameDraft.substring(0, settingsNameDraft.length() - 1);
+                }
+                return true;
+            }
+            if (keyCode == InputConstants.KEY_RETURN || keyCode == InputConstants.KEY_NUMPADENTER) {
+                commitSettingsNameEdit();
+                return true;
+            }
+            return true;
+        }
+
+        if (settingsAppMode && keyCode == InputConstants.KEY_ESCAPE) {
+            settingsGoBack();
             return true;
         }
 
@@ -705,7 +928,23 @@ public final class PhoneScreen extends Screen {
             }
         }
 
-        if (chatAppMode) {
+        if (chatAppMode && !chatAddSelectorMode) {
+            if (chatNicknameEditMode) {
+                if (keyCode == InputConstants.KEY_BACKSPACE) {
+                    if (!chatNicknameDraft.isEmpty()) {
+                        chatNicknameDraft = chatNicknameDraft.substring(0, chatNicknameDraft.length() - 1);
+                    }
+                    return true;
+                }
+                if (keyCode == InputConstants.KEY_RETURN || keyCode == InputConstants.KEY_NUMPADENTER) {
+                    PhoneNetworkingClient.requestSetNickname(chatNicknameDraft);
+                    chatNicknameEditMode = false;
+                    rebuildWidgets();
+                    return true;
+                }
+                return true;
+            }
+
             String digit = getDigitForKey(keyCode);
             if (digit != null) {
                 appendChatFriendDigit(digit);
@@ -805,7 +1044,26 @@ public final class PhoneScreen extends Screen {
 
     @Override
     public boolean charTyped(char codePoint, int modifiers) {
-        if (chatAppMode) {
+        if (settingsAppMode && settingsNameEditMode) {
+            if (Character.isISOControl(codePoint)) {
+                return false;
+            }
+            if (settingsNameDraft.length() < PhoneData.MAX_CONTACT_NAME_LENGTH) {
+                settingsNameDraft += codePoint;
+            }
+            return true;
+        }
+
+        if (chatAppMode && !chatAddSelectorMode) {
+            if (chatNicknameEditMode) {
+                if (Character.isISOControl(codePoint)) {
+                    return false;
+                }
+                if (chatNicknameDraft.length() < PhoneData.MAX_CONTACT_NAME_LENGTH) {
+                    chatNicknameDraft += codePoint;
+                }
+                return true;
+            }
             if (Character.isDigit(codePoint)) {
                 appendChatFriendDigit(String.valueOf(codePoint));
                 return true;
@@ -815,11 +1073,6 @@ public final class PhoneScreen extends Screen {
 
         if (chatThreadMode && isAcceptedChatCharacter(codePoint)) {
             appendChatDraftCharacter(codePoint);
-            return true;
-        }
-
-        if (bankAppMode && acceptsBankNumericInput() && Character.isDigit(codePoint)) {
-            appendBankDigit(String.valueOf(codePoint));
             return true;
         }
 
@@ -885,6 +1138,30 @@ public final class PhoneScreen extends Screen {
             return false;
         }
 
+        if (isChatScanCameraMode()) {
+            if (button == 0 && getBankScanReceiveButtonBounds().contains(mouseX, mouseY)) {
+                openChatQrPage();
+                return true;
+            }
+
+            if (button == 0 && getBankScanEyeButtonBounds().contains(mouseX, mouseY)) {
+                setCameraMoveModeRotated(true, rawMouseX, rawMouseY);
+                return true;
+            }
+
+            boolean handled = super.mouseClicked(mouseX, mouseY, button);
+            if (handled) {
+                return true;
+            }
+
+            if ((button == 0 || button == 1) && getCameraViewBounds().contains(mouseX, mouseY) && !cameraMoveMode) {
+                tryScanChatTarget();
+                return true;
+            }
+
+            return false;
+        }
+
         if (cameraMode && button == 1 && !capturePending) {
             requestPhotoCapture();
             return true;
@@ -927,6 +1204,9 @@ public final class PhoneScreen extends Screen {
 
             if (getCallMuteButtonBounds().contains(mouseX, mouseY)) {
                 callMuted = !callMuted;
+                // Update the shared client state optimistically so the per-tick sync
+                // agrees (no flicker); the server confirms/corrects it shortly after.
+                PhoneClientCallState.setMuted(homePhonePos, callMuted);
                 if (homePhoneMode) {
                     PhoneNetworkingClient.requestToggleMute(homePhonePos);
                 } else {
@@ -937,6 +1217,7 @@ public final class PhoneScreen extends Screen {
 
             if (getCallSpeakerButtonBounds().contains(mouseX, mouseY)) {
                 callSpeakerEnabled = !callSpeakerEnabled;
+                PhoneClientCallState.setSpeakerEnabled(homePhonePos, callSpeakerEnabled);
                 if (homePhoneMode) {
                     PhoneNetworkingClient.requestToggleSpeaker(homePhonePos);
                 } else {
@@ -949,6 +1230,11 @@ public final class PhoneScreen extends Screen {
         if (button == 0 && callAppMode) {
             if (getCallListMenuBounds().contains(mouseX, mouseY)) {
                 openCallContactsPage();
+                return true;
+            }
+
+            if (getCallRecentsMenuBounds().contains(mouseX, mouseY)) {
+                openCallRecentsPage();
                 return true;
             }
 
@@ -979,6 +1265,11 @@ public final class PhoneScreen extends Screen {
                 return true;
             }
 
+            if (getCallRecentsMenuBounds().contains(mouseX, mouseY)) {
+                openCallRecentsPage();
+                return true;
+            }
+
             if (getCallListMenuBounds().contains(mouseX, mouseY)) {
                 return true;
             }
@@ -1005,6 +1296,31 @@ public final class PhoneScreen extends Screen {
                     openEditContactPage(contact);
                 } else {
                     startCallSession(contact.number());
+                }
+                return true;
+            }
+        }
+
+        if (button == 0 && callRecentsMode) {
+            if (getCallDialMenuBounds().contains(mouseX, mouseY)) {
+                openCallDialPage();
+                return true;
+            }
+
+            if (getCallRecentsMenuBounds().contains(mouseX, mouseY)) {
+                return true;
+            }
+
+            if (getCallListMenuBounds().contains(mouseX, mouseY)) {
+                openCallContactsPage();
+                return true;
+            }
+
+            int clickedRecentsIndex = getRecentsListIndexAt(mouseX, mouseY);
+            if (clickedRecentsIndex >= 0) {
+                List<CallLogEntry> entries = PhoneClientCallState.getCallLogEntries();
+                if (clickedRecentsIndex < entries.size()) {
+                    startCallSession(entries.get(clickedRecentsIndex).otherNumber());
                 }
                 return true;
             }
@@ -1046,7 +1362,132 @@ public final class PhoneScreen extends Screen {
             }
         }
 
-        if (chatAppMode) {
+        if (chatAppMode && !cameraMode) {
+            // Navigation buttons sit on top of every chat sub-page and must always
+            // win, otherwise pages that swallow clicks (e.g. the Profile tab) would
+            // eat the Home/back/forward buttons.
+            if (button == 0 && isOverNavButton(mouseX, mouseY)) {
+                return super.mouseClicked(mouseX, mouseY, button);
+            }
+
+            if (chatQrShowMode) {
+                if (button == 0 && getChatAddBackBtnBounds().contains(mouseX, mouseY)) {
+                    closeChatQrPage();
+                } else if (button == 0 && getChatQrShowButtonBounds().contains(mouseX, mouseY)) {
+                    // Hold the phone up in the world so a friend can scan you (chat QR variant).
+                    showBankReceiveQrToWorld(true);
+                }
+                return true;
+            }
+
+            if (chatAddSelectorMode) {
+                if (button == 0) {
+                    UiRect contentBounds = getChatSurfaceBounds();
+                    int heroBottom = contentBounds.top + Math.max(22, Math.round(26 * scale));
+                    if (mouseY < heroBottom) {
+                        chatAddSelectorMode = false;
+                        rebuildWidgets();
+                        return true;
+                    }
+
+                    List<PlayerInfo> selectables = getChatAddSelectablePlayers();
+                    UiRect rowsBounds = getChatFriendRowsBounds();
+                    if (rowsBounds.contains(mouseX, mouseY)) {
+                        int listRowHeight = Math.max(22, Math.round(26 * scale));
+                        int rowGap = Math.max(2, Math.round(3 * scale));
+                        int listTop = rowsBounds.top + chatAddSelectorScrollOffset;
+                        for (int i = 0; i < selectables.size(); i++) {
+                            int y = listTop + i * (listRowHeight + rowGap);
+                            UiRect rowBounds = new UiRect(rowsBounds.left, y, rowsBounds.width, listRowHeight);
+                            if (rowBounds.contains(mouseX, mouseY)) {
+                                PlayerInfo clicked = selectables.get(i);
+                                String number = getPlayerPhoneNumber(clicked.getProfile().getId());
+                                addChatFriend(number);
+                                chatAddSelectorMode = false;
+                                chatFriendNumber = "";
+                                rebuildWidgets();
+                                return true;
+                            }
+                        }
+                    }
+                }
+                return true;
+            }
+
+            if (button == 0) {
+                // Tab bar is only visible on the main chat/profile views (not the Add
+                // Friend menu) and must never steal clicks from the navigation buttons
+                // that sit on top of it at the bottom of the screen.
+                if (!chatAddMenuOpen && !isOverNavButton(mouseX, mouseY)) {
+                    UiRect tabBounds = getChatTabBarBounds();
+                    if (tabBounds.contains(mouseX, mouseY)) {
+                        int halfWidth = tabBounds.width / 2;
+                        if (mouseX < tabBounds.left + halfWidth) {
+                            chatTab = 0;
+                        } else {
+                            chatTab = 1;
+                            chatNicknameDraft = PhoneClientChatState.getOwnNickname();
+                            chatNicknameEditMode = false;
+                        }
+                        rebuildWidgets();
+                        return true;
+                    }
+                }
+
+                // Check Add Friend page clicks if open
+                if (chatAddMenuOpen) {
+                    if (getChatAddBackBtnBounds().contains(mouseX, mouseY)) {
+                        chatAddMenuOpen = false;
+                        rebuildWidgets();
+                        return true;
+                    }
+
+                    if (getChatAddConfirmBtnBounds().contains(mouseX, mouseY) && canAddChatFriend(chatFriendNumber)) {
+                        addChatFriend(chatFriendNumber);
+                        chatAddMenuOpen = false;
+                        rebuildWidgets();
+                        return true;
+                    }
+
+                    if (getChatAddOptOnlineBounds().contains(mouseX, mouseY)) {
+                        chatAddMenuOpen = false;
+                        chatAddSelectorMode = true;
+                        chatAddSelectorScrollOffset = 0;
+                        rebuildWidgets();
+                        return true;
+                    }
+
+                    if (getChatAddOptScanBounds().contains(mouseX, mouseY)) {
+                        openChatScanCamera();
+                        return true;
+                    }
+                    return true;
+                }
+
+                // Tab Specific checks
+                if (chatTab == 1) { // Profile Tab
+                    if (getChatAddFriendButtonBounds().contains(mouseX, mouseY)) {
+                        chatAddMenuOpen = true;
+                        rebuildWidgets();
+                        return true;
+                    }
+                    if (getChatNicknameEditBounds().contains(mouseX, mouseY)) {
+                        chatNicknameEditMode = true;
+                        chatNicknameDraft = PhoneClientChatState.getOwnNickname();
+                        rebuildWidgets();
+                        return true;
+                    }
+                    if (chatNicknameEditMode) {
+                        PhoneNetworkingClient.requestSetNickname(chatNicknameDraft);
+                        chatNicknameEditMode = false;
+                        rebuildWidgets();
+                        return true;
+                    }
+                    return true;
+                }
+            }
+
+            // Tabs = 0 (Chats Tab)
             List<PhoneContact> friends = getChatFriends();
             int friendIndex = getChatFriendIndexAt(mouseX, mouseY, friends);
 
@@ -1070,6 +1511,19 @@ public final class PhoneScreen extends Screen {
                         clearChatDeleteMenu();
                         return true;
                     }
+                }
+
+                if (getChatHeaderPlusBounds().contains(mouseX, mouseY)) {
+                    chatAddMenuOpen = true;
+                    rebuildWidgets();
+                    return true;
+                }
+
+                if (getChatFriendInputBounds().contains(mouseX, mouseY)) {
+                    chatAddSelectorMode = true;
+                    chatAddSelectorScrollOffset = 0;
+                    rebuildWidgets();
+                    return true;
                 }
 
                 if (getChatAddButtonBounds().contains(mouseX, mouseY) && canAddChatFriend(chatFriendNumber)) {
@@ -1144,6 +1598,10 @@ public final class PhoneScreen extends Screen {
                 rebuildWidgets();
                 return true;
             }
+            if (getGalleryImportButtonBounds().contains(mouseX, mouseY)) {
+                importPhotoViaDialog();
+                return true;
+            }
             int clickedPhotoIndex = getGalleryPhotoIndexAt(mouseX, mouseY, getPhotos());
             if (clickedPhotoIndex >= 0) {
                 openPhotoViewer(clickedPhotoIndex);
@@ -1162,9 +1620,10 @@ public final class PhoneScreen extends Screen {
             }
         }
 
-        // Settings app clicks
-        if (button == 0 && settingsAppMode) {
-            return PhoneSettingsSurfaceRenderer.handleClick(this, mouseX, mouseY);
+        // Settings app clicks — fall through to widgets (nav buttons) when unhandled
+        if (button == 0 && settingsAppMode
+                && PhoneSettingsSurfaceRenderer.handleClick(this, mouseX, mouseY)) {
+            return true;
         }
 
         boolean handled = super.mouseClicked(mouseX, mouseY, button);
@@ -1173,6 +1632,10 @@ public final class PhoneScreen extends Screen {
         }
 
         if (button == 0 && photoViewerMode && !fullScreenPhotoMode) {
+            if (getViewerExportButtonBounds().contains(mouseX, mouseY)) {
+                exportCurrentPhoto();
+                return true;
+            }
             ViewerLayout viewerLayout = getViewerLayout();
             if (mouseX >= viewerLayout.areaX && mouseX <= viewerLayout.areaX + viewerLayout.areaWidth
                     && mouseY >= viewerLayout.areaY && mouseY <= viewerLayout.areaY + viewerLayout.areaHeight) {
@@ -1265,6 +1728,33 @@ public final class PhoneScreen extends Screen {
             adjustCameraZoom(scrollDelta);
             return true;
         }
+        if (callRecentsMode && scrollDelta != 0.0D) {
+            int totalEntries = PhoneClientCallState.getCallLogEntries().size();
+            int maxOffset = Math.max(0, totalEntries - getRecentsVisibleRows());
+            recentsScrollOffset = Mth.clamp(recentsScrollOffset - (int) Math.signum(scrollDelta), 0, maxOffset);
+            return true;
+        }
+
+        if (chatThreadMode && scrollDelta != 0.0D) {
+            int maxOffset = getMaxChatScrollOffset();
+            int scrollAmount = (int) Math.signum(scrollDelta) * 12;
+            chatScrollOffset = Mth.clamp(chatScrollOffset + scrollAmount, 0, maxOffset);
+            return true;
+        }
+
+        if (chatAppMode && chatAddSelectorMode && scrollDelta != 0.0D) {
+            int maxOffset = getMaxChatAddSelectorScrollOffset();
+            int scrollAmount = (int) (scrollDelta * 12);
+            chatAddSelectorScrollOffset = Mth.clamp(chatAddSelectorScrollOffset + scrollAmount, -maxOffset, 0);
+            return true;
+        }
+
+        if (settingsAppMode && settingsWallpaperPage != 0 && scrollDelta != 0.0D) {
+            int maxOffset = PhoneSettingsSurfaceRenderer.getMaxWallpaperScroll(this);
+            settingsWallpaperScroll = Mth.clamp(settingsWallpaperScroll - (int) (scrollDelta * 14), 0, maxOffset);
+            return true;
+        }
+
         return super.mouseScrolled(mouseX, mouseY, scrollDelta);
     }
 
@@ -1313,8 +1803,10 @@ public final class PhoneScreen extends Screen {
                 }) {
             @Override
             public void renderWidget(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
-                guiGraphics.blit(this.resourceLocation, this.getX(), this.getY(), this.width, this.height, 0.0F, 0.0F,
-                        UNLOCK_TEXTURE_SIZE, UNLOCK_TEXTURE_SIZE, UNLOCK_TEXTURE_SIZE, UNLOCK_TEXTURE_SIZE);
+                // Drawn as a colored vector padlock (not a texture blit) so the user's
+                // chosen lock-screen accent color always applies — the source PNG is
+                // baked pure black and can't be tinted via shader color multiply.
+                PhoneScreenDraw.drawPadlockIcon(guiGraphics, this.getX(), this.getY(), this.width, getLockAccentColor());
             }
         });
 
@@ -1472,9 +1964,36 @@ public final class PhoneScreen extends Screen {
         addNavigationButtons();
     }
 
+    private int navSlotSize() {
+        return Math.round((ICON_SIZE * 0.85F) * scale);
+    }
+
+    private int navRowTop() {
+        return displayY + displayHeight - navSlotSize() + Math.round(6 * scale);
+    }
+
+    /** True if the point lands on any of the three on-screen navigation buttons. */
+    private boolean isOverNavButton(double mouseX, double mouseY) {
+        int navSlotSize = navSlotSize();
+        int navY = navRowTop();
+        if (mouseY < navY || mouseY > navY + navSlotSize) {
+            return false;
+        }
+        int navLeftX = displayX + Math.round(8 * scale);
+        int navCenterX = displayX + (displayWidth - navSlotSize) / 2;
+        int navRightX = displayX + displayWidth - navSlotSize - Math.round(8 * scale);
+        return contains(navLeftX, mouseX, navSlotSize)
+                || contains(navCenterX, mouseX, navSlotSize)
+                || contains(navRightX, mouseX, navSlotSize);
+    }
+
+    private static boolean contains(int start, double value, int size) {
+        return value >= start && value <= start + size;
+    }
+
     private void addNavigationButtons() {
-        int navSlotSize = Math.round((ICON_SIZE * 0.85F) * scale);
-        int navY = displayY + displayHeight - navSlotSize + Math.round(6 * scale);
+        int navSlotSize = navSlotSize();
+        int navY = navRowTop();
         int navLeftX = displayX + Math.round(8 * scale);
         int navCenterX = displayX + (displayWidth - navSlotSize) / 2;
         int navRightX = displayX + displayWidth - navSlotSize - Math.round(8 * scale);
@@ -1499,6 +2018,14 @@ public final class PhoneScreen extends Screen {
                     }
 
                     if (chatAppMode) {
+                        if (isChatScanCameraMode()) {
+                            closeChatScanCamera();
+                            return;
+                        }
+                        if (chatQrShowMode) {
+                            closeChatQrPage();
+                            return;
+                        }
                         closeChatApp();
                         return;
                     }
@@ -1509,11 +2036,11 @@ public final class PhoneScreen extends Screen {
                     }
 
                     if (settingsAppMode) {
-                        closeSettingsApp();
+                        settingsGoBack();
                         return;
                     }
 
-                    if (callContactsMode) {
+                    if (callRecentsMode || callContactsMode) {
                         if (isCallScreenLocked()) {
                             return;
                         }
@@ -1554,7 +2081,7 @@ public final class PhoneScreen extends Screen {
                         return;
                     }
 
-                    if (callSessionMode || callAppMode || callContactsMode) {
+                    if (callSessionMode || callAppMode || callContactsMode || callRecentsMode) {
                         if (isCallScreenLocked()) {
                             closeScreenKeepCall();
                             return;
@@ -1663,8 +2190,20 @@ public final class PhoneScreen extends Screen {
             return;
         }
 
+        if (callRecentsMode) {
+            renderCallRecentsSurface(guiGraphics);
+            return;
+        }
+
         if (callAppMode) {
             renderCallAppSurface(guiGraphics);
+            return;
+        }
+
+        // Camera must win over the chat surfaces: the chat QR scanner keeps
+        // chatAppMode set while the camera is open.
+        if (cameraMode) {
+            renderCameraSurface(guiGraphics, partialTick);
             return;
         }
 
@@ -1675,11 +2214,6 @@ public final class PhoneScreen extends Screen {
 
         if (chatAppMode) {
             renderChatAppSurface(guiGraphics);
-            return;
-        }
-
-        if (cameraMode) {
-            renderCameraSurface(guiGraphics, partialTick);
             return;
         }
 
@@ -1700,21 +2234,89 @@ public final class PhoneScreen extends Screen {
 
         if (!unlocked) {
             Minecraft minecraft = Minecraft.getInstance();
-            if (minecraft.level != null) {
-                long gameTime = minecraft.level.getDayTime() % 24000L;
-                int hours = (int) ((gameTime + 6000) / 1000) % 24;
-                int minutes = (int) ((gameTime % 1000) * 60 / 1000);
-
-                Component timeText = Component.literal(String.format("%02d:%02d", hours, minutes));
+            String timeString = formatLockScreenTime();
+            if (!timeString.isEmpty()) {
+                Component timeText = Component.literal(timeString);
                 float timeScale = Math.max(1.55F, scale * 1.95F);
                 int textWidth = PhoneScreenDraw.scaledTextWidth(minecraft.font, timeText, timeScale);
                 int textHeight = PhoneScreenDraw.scaledTextHeight(minecraft.font, timeScale);
                 int textX = displayX + (displayWidth - textWidth) / 2;
                 int textY = displayY + Math.round(displayHeight * 0.24F) - (textHeight / 2);
 
-                PhoneScreenDraw.drawScaledText(guiGraphics, minecraft.font, timeText, textX, textY, 0xFF404040, false, timeScale);
+                PhoneScreenDraw.drawScaledText(guiGraphics, minecraft.font, timeText, textX, textY,
+                        getLockAccentColor(), false, timeScale);
             }
         }
+    }
+
+    /** Current lock-screen accent color (unlock icon + clock), user-configurable in Settings → Appearance. */
+    int getLockAccentColor() {
+        return PhoneAppearanceData.getLockAccentColor(getOpenPhoneStack());
+    }
+
+    void setLockAccentColor(int argbColor) {
+        ItemStack stack = getOpenPhoneStack();
+        if (stack.isEmpty()) {
+            return;
+        }
+        PhoneAppearanceData.setLockAccentColor(stack, argbColor);
+        PhoneData.markDirty(Minecraft.getInstance().player);
+    }
+
+    boolean isRealLifeTime() {
+        return PhoneAppearanceData.isRealLifeTime(getOpenPhoneStack());
+    }
+
+    void setRealLifeTime(boolean realLife) {
+        ItemStack stack = getOpenPhoneStack();
+        if (stack.isEmpty()) {
+            return;
+        }
+        PhoneAppearanceData.setRealLifeTime(stack, realLife);
+        PhoneData.markDirty(Minecraft.getInstance().player);
+    }
+
+    boolean is12HourTimeFormat() {
+        return PhoneAppearanceData.is12HourFormat(getOpenPhoneStack());
+    }
+
+    void set12HourTimeFormat(boolean use12Hour) {
+        ItemStack stack = getOpenPhoneStack();
+        if (stack.isEmpty()) {
+            return;
+        }
+        PhoneAppearanceData.set12HourFormat(stack, use12Hour);
+        PhoneData.markDirty(Minecraft.getInstance().player);
+    }
+
+    /** Formats the lock-screen clock per the phone's time-source and time-format settings. */
+    private String formatLockScreenTime() {
+        ItemStack stack = getOpenPhoneStack();
+        int hours;
+        int minutes;
+        if (PhoneAppearanceData.isRealLifeTime(stack)) {
+            java.time.LocalTime now = java.time.LocalTime.now();
+            hours = now.getHour();
+            minutes = now.getMinute();
+        } else {
+            Minecraft minecraft = Minecraft.getInstance();
+            if (minecraft.level == null) {
+                return "";
+            }
+            long gameTime = minecraft.level.getDayTime() % 24000L;
+            hours = (int) ((gameTime + 6000) / 1000) % 24;
+            minutes = (int) ((gameTime % 1000) * 60 / 1000);
+        }
+
+        if (PhoneAppearanceData.is12HourFormat(stack)) {
+            int displayHour = hours % 12;
+            if (displayHour == 0) {
+                displayHour = 12;
+            }
+            String suffix = hours < 12 ? "AM" : "PM";
+            return String.format("%d:%02d %s", displayHour, minutes, suffix);
+        }
+        return String.format("%02d:%02d", hours, minutes);
     }
 
     private void renderGallerySurface(GuiGraphics guiGraphics) {
@@ -1731,6 +2333,10 @@ public final class PhoneScreen extends Screen {
 
     private void renderCallContactsSurface(GuiGraphics guiGraphics) {
         PhoneCallSurfaceRenderer.renderCallContactsSurface(this, guiGraphics);
+    }
+
+    private void renderCallRecentsSurface(GuiGraphics guiGraphics) {
+        PhoneCallSurfaceRenderer.renderCallRecentsSurface(this, guiGraphics);
     }
 
     private void renderAddContactSurface(GuiGraphics guiGraphics) {
@@ -1755,6 +2361,10 @@ public final class PhoneScreen extends Screen {
 
     private void renderBankCameraOverlay(GuiGraphics guiGraphics) {
         PhoneBankSurfaceRenderer.renderBankCameraOverlay(this, guiGraphics);
+    }
+
+    private void renderChatCameraOverlay(GuiGraphics guiGraphics) {
+        PhoneChatSurfaceRenderer.renderChatCameraOverlay(this, guiGraphics);
     }
 
     private void renderCallBackdrop(GuiGraphics guiGraphics) {
@@ -1812,8 +2422,48 @@ public final class PhoneScreen extends Screen {
         return getLayoutState().galleryPhotoIndexAt(mouseX, mouseY, galleryPage, photos.size());
     }
 
+    UiRect getGalleryImportButtonBounds() {
+        // Same size as the viewer's Save button.
+        UiRect content = getMediaSurfaceBounds();
+        int height = Math.max(11, Math.round(13 * scale));
+        int width = Math.max(26, Math.round(32 * scale));
+        int top = content.top + Math.max(4, Math.round(6 * scale));
+        int right = content.right() - Math.max(3, Math.round(4 * scale));
+        return new UiRect(right - width, top, width, height);
+    }
+
+    UiRect getViewerExportButtonBounds() {
+        UiRect content = getMediaSurfaceBounds();
+        int deleteSize = Math.round(24 * scale);
+        int deleteX = content.right() - deleteSize - Math.round(6 * scale);
+        int height = Math.max(11, Math.round(13 * scale));
+        int width = Math.max(26, Math.round(32 * scale));
+        int top = content.top + Math.round(8 * scale) + Math.max(0, (deleteSize - height) / 2);
+        int right = deleteX - Math.max(4, Math.round(5 * scale));
+        return new UiRect(right - width, top, width, height);
+    }
+
     UiRect getCallSurfaceBounds() {
         return getLayoutState().callSurfaceBounds();
+    }
+
+    // ── Recents list geometry (shared by the renderer and the scroll handler so the
+    //    scroll range always matches the visible rows and the last entries are reachable) ──
+    int getRecentsRowHeight() {
+        return Math.max(16, Math.round(20 * scale));
+    }
+
+    int getRecentsListTop() {
+        return getCallSurfaceBounds().top + getCallHeaderHeight() + Math.max(8, Math.round(10 * scale));
+    }
+
+    int getRecentsListBottom() {
+        // Stop the list above the bottom tab bar (Call / Recents / Contacts).
+        return getCallDialMenuBounds().top - Math.max(4, Math.round(6 * scale));
+    }
+
+    int getRecentsVisibleRows() {
+        return Math.max(1, (getRecentsListBottom() - getRecentsListTop()) / getRecentsRowHeight());
     }
 
     UiRect getCallBackdropBounds() {
@@ -1838,6 +2488,10 @@ public final class PhoneScreen extends Screen {
 
     UiRect getCallDialMenuBounds() {
         return getLayoutState().callDialMenuBounds();
+    }
+
+    UiRect getCallRecentsMenuBounds() {
+        return getLayoutState().callRecentsMenuBounds();
     }
 
     UiRect getCallListMenuBounds() {
@@ -1957,6 +2611,25 @@ public final class PhoneScreen extends Screen {
         return getLayoutState().callHangupButtonBounds();
     }
 
+    private int getRecentsListIndexAt(double mouseX, double mouseY) {
+        UiRect contentBounds = getCallSurfaceBounds();
+        int rowHeight = Math.max(16, Math.round(20 * scale));
+        int topPadding = Math.max(8, Math.round(10 * scale));
+        int insetX = Math.max(6, Math.round(8 * scale));
+        int listLeft = contentBounds.left + insetX;
+        int listWidth = contentBounds.width - (insetX * 2);
+        int listTop = contentBounds.top + getCallHeaderHeight() + topPadding;
+        int visibleRows = (contentBounds.bottom() - listTop) / rowHeight;
+        List<CallLogEntry> entries = PhoneClientCallState.getCallLogEntries();
+        for (int i = recentsScrollOffset; i < Math.min(entries.size(), recentsScrollOffset + visibleRows + 1); i++) {
+            UiRect rowBounds = new UiRect(listLeft, listTop + (i - recentsScrollOffset) * rowHeight, listWidth, rowHeight);
+            if (rowBounds.contains(mouseX, mouseY)) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
     UiRect getCallMuteButtonBounds() {
         return getLayoutState().callMuteButtonBounds();
     }
@@ -1997,10 +2670,124 @@ public final class PhoneScreen extends Screen {
     UiRect getChatFriendRowsBounds() {
         UiRect contentBounds = getChatSurfaceBounds();
         int sidePadding = getChatSidePadding();
-        int top = getChatFriendInputBounds().bottom() + Math.max(5, Math.round(6 * scale));
-        int bottom = contentBounds.bottom() - Math.max(2, Math.round(3 * scale));
+        int top = getChatHeaderBounds().bottom() + Math.max(5, Math.round(6 * scale));
+        UiRect tabBounds = getChatTabBarBounds();
+        int bottom = tabBounds.top;
         return new UiRect(contentBounds.left + sidePadding, top,
                 contentBounds.width - (sidePadding * 2), Math.max(24, bottom - top));
+    }
+
+    UiRect getChatTabBarBounds() {
+        UiRect contentBounds = getChatSurfaceBounds();
+        int bezelOverlap = Math.max(12, Math.round(14 * scale));
+        int height = Math.max(22, Math.round(24 * scale));
+        return new UiRect(contentBounds.left, contentBounds.bottom() - height - bezelOverlap, contentBounds.width, height + bezelOverlap);
+    }
+
+    UiRect getChatAddSheetBounds() {
+        UiRect contentBounds = getChatSurfaceBounds();
+        int height = Math.max(100, Math.round(110 * scale));
+        return new UiRect(contentBounds.left, contentBounds.bottom() - height, contentBounds.width, height);
+    }
+
+    UiRect getChatNicknameEditBounds() {
+        Minecraft minecraft = Minecraft.getInstance();
+        UiRect contentBounds = getChatSurfaceBounds();
+        int avatarSize = Math.max(24, Math.round(30 * scale));
+        int avatarY = contentBounds.top + Math.max(8, Math.round(10 * scale));
+        int nicknameHeight = Math.max(9, Math.round(minecraft.font.lineHeight * 0.9F));
+        int top = avatarY + avatarSize + Math.max(4, Math.round(6 * scale)) + nicknameHeight + Math.max(4, Math.round(6 * scale));
+        int width = Math.max(80, Math.round(100 * scale));
+        int height = Math.max(14, Math.round(18 * scale));
+        int left = contentBounds.left + (contentBounds.width - width) / 2;
+        return new UiRect(left, top, width, height);
+    }
+
+    UiRect getChatProfileDetailsBounds() {
+        // Stack straight down from the nickname field so the card never rides up
+        // over the nickname area on small displays.
+        UiRect editBounds = getChatNicknameEditBounds();
+        UiRect contentBounds = getChatSurfaceBounds();
+        int width = contentBounds.width - Math.max(16, Math.round(20 * scale));
+        int height = Math.max(28, Math.round(34 * scale));
+        int left = contentBounds.left + (contentBounds.width - width) / 2;
+        int top = editBounds.bottom() + Math.max(6, Math.round(8 * scale));
+        return new UiRect(left, top, width, height);
+    }
+
+    UiRect getChatProfileFriendsBounds() {
+        UiRect detailsBounds = getChatProfileDetailsBounds();
+        int height = Math.max(20, Math.round(24 * scale));
+        int top = detailsBounds.bottom() + Math.max(4, Math.round(5 * scale));
+        return new UiRect(detailsBounds.left, top, detailsBounds.width, height);
+    }
+
+    UiRect getChatAddFriendButtonBounds() {
+        UiRect friendsBounds = getChatProfileFriendsBounds();
+        int width = Math.max(80, Math.round(100 * scale));
+        int height = Math.max(16, Math.round(20 * scale));
+        int left = friendsBounds.left + (friendsBounds.width - width) / 2;
+        int top = friendsBounds.bottom() + Math.max(6, Math.round(8 * scale));
+        return new UiRect(left, top, width, height);
+    }
+
+    UiRect getChatAddBackBtnBounds() {
+        UiRect contentBounds = getChatSurfaceBounds();
+        int size = Math.max(14, Math.round(18 * scale));
+        return new UiRect(contentBounds.left + Math.max(6, Math.round(8 * scale)), contentBounds.top + Math.max(5, Math.round(6 * scale)), size, size);
+    }
+
+    UiRect getChatAddInputBounds() {
+        UiRect contentBounds = getChatSurfaceBounds();
+        int width = contentBounds.width - Math.max(20, Math.round(30 * scale));
+        int height = Math.max(18, Math.round(22 * scale));
+        int left = contentBounds.left + (contentBounds.width - width) / 2;
+        int top = contentBounds.top + Math.max(45, Math.round(52 * scale));
+        return new UiRect(left, top, width, height);
+    }
+
+    UiRect getChatAddConfirmBtnBounds() {
+        UiRect inputBounds = getChatAddInputBounds();
+        int width = Math.max(70, Math.round(90 * scale));
+        int height = Math.max(18, Math.round(22 * scale));
+        int left = inputBounds.left + (inputBounds.width - width) / 2;
+        int top = inputBounds.bottom() + Math.max(5, Math.round(8 * scale));
+        return new UiRect(left, top, width, height);
+    }
+
+    UiRect getChatQrShowButtonBounds() {
+        UiRect contentBounds = getChatSurfaceBounds();
+        int width = Math.max(80, Math.round(104 * scale));
+        int height = Math.max(18, Math.round(22 * scale));
+        int left = contentBounds.left + (contentBounds.width - width) / 2;
+        // Sit clear above the frame's bottom chin / nav buttons so it isn't cut off.
+        int top = contentBounds.bottom() - height - Math.max(20, Math.round(28 * scale));
+        return new UiRect(left, top, width, height);
+    }
+
+    UiRect getChatAddOptOnlineBounds() {
+        UiRect confirmBounds = getChatAddConfirmBtnBounds();
+        UiRect contentBounds = getChatSurfaceBounds();
+        int width = contentBounds.width - Math.max(20, Math.round(30 * scale));
+        int height = Math.max(22, Math.round(28 * scale));
+        int left = contentBounds.left + (contentBounds.width - width) / 2;
+        int top = confirmBounds.bottom() + Math.max(15, Math.round(20 * scale));
+        return new UiRect(left, top, width, height);
+    }
+
+    UiRect getChatAddOptScanBounds() {
+        UiRect onlineBounds = getChatAddOptOnlineBounds();
+        int top = onlineBounds.bottom() + Math.max(6, Math.round(10 * scale));
+        return new UiRect(onlineBounds.left, top, onlineBounds.width, onlineBounds.height);
+    }
+
+    UiRect getChatHeaderPlusBounds() {
+        // Pill-shaped "+ Add" button matching the gallery's "+ Import" button.
+        UiRect headerBounds = getChatHeaderBounds();
+        int height = Math.max(11, Math.round(14 * scale));
+        int width = Math.max(28, Math.round(36 * scale));
+        int right = headerBounds.right() - Math.max(2, Math.round(3 * scale));
+        return new UiRect(right - width, headerBounds.top + (headerBounds.height - height) / 2, width, height);
     }
 
     UiRect getChatFriendRowBounds(int index, int friendCount) {
@@ -2289,6 +3076,93 @@ public final class PhoneScreen extends Screen {
         return PhoneClientChatState.getMessages(activeChatNumber);
     }
 
+    int getMaxChatScrollOffset() {
+        List<PhoneChatMessage> messages = getActiveChatMessages();
+        if (messages.isEmpty()) {
+            return 0;
+        }
+
+        Font font = this.font;
+        UiRect messagesBounds = getChatMessagesBounds();
+        int bubblePaddingX = Math.max(4, Math.round(5 * scale));
+        int bubblePaddingY = Math.max(3, Math.round(4 * scale));
+        int bubbleGap = Math.max(4, Math.round(5 * scale));
+        int lineHeight = Math.max(7, Math.round(font.lineHeight * 0.65F));
+        int maxBubbleWidth = Math.max(38, Math.round(messagesBounds.width * 0.80F));
+        int sideInset = Math.max(1, Math.round(2 * scale));
+
+        int totalHeight = 0;
+        for (int i = 0; i < messages.size(); i++) {
+            PhoneChatMessage message = messages.get(i);
+            List<FormattedCharSequence> lines = font.split(Component.literal(message.text()),
+                    Math.max(18, maxBubbleWidth - (bubblePaddingX * 2)));
+            int bubbleHeight = (lines.size() * lineHeight) + (bubblePaddingY * 2);
+            totalHeight += bubbleHeight;
+            if (i < messages.size() - 1) {
+                totalHeight += bubbleGap;
+            }
+        }
+
+        int viewportHeight = messagesBounds.height - sideInset * 2;
+        return Math.max(0, totalHeight - viewportHeight);
+    }
+
+    int getMaxChatAddSelectorScrollOffset() {
+        List<PlayerInfo> selectables = getChatAddSelectablePlayers();
+        if (selectables.isEmpty()) {
+            return 0;
+        }
+
+        UiRect rowsBounds = getChatFriendRowsBounds();
+        int listRowHeight = Math.max(22, Math.round(26 * scale));
+        int rowGap = Math.max(2, Math.round(3 * scale));
+        int totalHeight = selectables.size() * (listRowHeight + rowGap) - rowGap;
+
+        return Math.max(0, totalHeight - rowsBounds.height);
+    }
+
+    String getPlayerPhoneNumber(UUID uuid) {
+        if (uuid == null) {
+            return "00000";
+        }
+        int hash = uuid.hashCode();
+        int number = 10000 + Math.floorMod(hash, 90000);
+        return String.format(java.util.Locale.ROOT, "%05d", number);
+    }
+
+    List<PlayerInfo> getChatAddSelectablePlayers() {
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft == null || minecraft.getConnection() == null) {
+            return List.of();
+        }
+
+        List<PlayerInfo> list = new ArrayList<>();
+        String ownNumber = getOwnPhoneNumber();
+        for (PlayerInfo info : minecraft.getConnection().getOnlinePlayers()) {
+            if (info == null || info.getProfile() == null) {
+                continue;
+            }
+
+            UUID uuid = info.getProfile().getId();
+            String numberStr = getPlayerPhoneNumber(uuid);
+
+            if (numberStr.equals(ownNumber)) {
+                continue;
+            }
+
+            if (PhoneClientChatState.hasFriend(numberStr)) {
+                continue;
+            }
+
+            list.add(info);
+        }
+        return list;
+    }
+
+    ResourceLocation getPlayerSkin(PlayerInfo info) {
+        return info != null ? info.getSkinLocation() : DefaultPlayerSkin.getDefaultSkin();
+    }
+
     String getActiveChatDisplayName() {
         if (activeChatNumber.isEmpty()) {
             return "";
@@ -2408,11 +3282,30 @@ public final class PhoneScreen extends Screen {
             return;
         }
 
+        // Reproduce vanilla's look feel exactly. Our drag deltas arrive in GUI-scaled
+        // units (Minecraft scales cursor movement by guiScaledWidth/screenWidth before
+        // calling mouseMoved), so first convert them back to raw screen pixels, then
+        // apply the same sensitivity curve the game uses for a normal turn.
         double sensitivity = minecraft.options.sensitivity().get();
-        double multiplier = sensitivity * 1.5;
+        double base = sensitivity * 0.6 + 0.2;
+        double curve = base * base * base * 8.0 * 0.15;
 
-        float yaw = minecraft.player.getYRot() + (float) (dragX * multiplier);
-        float pitch = Mth.clamp(minecraft.player.getXRot() + (float) (dragY * multiplier), -90.0F, 90.0F);
+        int screenWidth = Math.max(1, minecraft.getWindow().getScreenWidth());
+        int screenHeight = Math.max(1, minecraft.getWindow().getScreenHeight());
+        double pixelsPerGuiX = (double) screenWidth / Math.max(1, minecraft.getWindow().getGuiScaledWidth());
+        double pixelsPerGuiY = (double) screenHeight / Math.max(1, minecraft.getWindow().getGuiScaledHeight());
+        double rawX = dragX * pixelsPerGuiX;
+        double rawY = dragY * pixelsPerGuiY;
+
+        // Clamp the raw step so the stale first-move after the cursor is grabbed
+        // (lastMouse = click position, then GLFW jumps the virtual cursor) can't snap
+        // the view violently.
+        double maxStep = 120.0;
+        rawX = Mth.clamp(rawX, -maxStep, maxStep);
+        rawY = Mth.clamp(rawY, -maxStep, maxStep);
+
+        float yaw = minecraft.player.getYRot() + (float) (rawX * curve);
+        float pitch = Mth.clamp(minecraft.player.getXRot() + (float) (rawY * curve), -90.0F, 90.0F);
 
         minecraft.player.setYRot(yaw);
         minecraft.player.setXRot(pitch);
@@ -2421,6 +3314,12 @@ public final class PhoneScreen extends Screen {
     }
 
     private void applyCallStateFromServer() {
+        // Always mirror the server-authoritative mute/speaker state so the button
+        // icons stay correct even after closing and reopening the phone (this runs
+        // every tick, independent of the call-state revision below).
+        callMuted = PhoneClientCallState.isMuted(homePhonePos);
+        callSpeakerEnabled = PhoneClientCallState.isSpeakerEnabled(homePhonePos);
+
         long nextRevision = PhoneClientCallState.getRevision(homePhonePos);
         if (nextRevision == observedCallStateRevision) {
             return;
@@ -2443,6 +3342,7 @@ public final class PhoneScreen extends Screen {
             if (callSessionMode) {
                 callSessionMode = false;
                 callContactsMode = false;
+                callRecentsMode = false;
                 
                 callAppMode = true;
                 addContactMode = false;
@@ -2479,6 +3379,7 @@ public final class PhoneScreen extends Screen {
             if (!cameraMode && !galleryMode && !photoViewerMode) {
                 callAppMode = false;
                 callContactsMode = false;
+                callRecentsMode = false;
                 
                 callSessionMode = true;
                 addContactMode = false;
@@ -2531,7 +3432,11 @@ public final class PhoneScreen extends Screen {
         if (enabled) {
             if (GLFW.glfwRawMouseMotionSupported() && !rawMouseMotionChanged) {
                 savedRawMouseMotion = GLFW.glfwGetInputMode(windowHandle, GLFW.GLFW_RAW_MOUSE_MOTION) == GLFW.GLFW_TRUE;
-                GLFW.glfwSetInputMode(windowHandle, GLFW.GLFW_RAW_MOUSE_MOTION, GLFW.GLFW_TRUE);
+                // Match the player's own Raw Input setting instead of forcing it on.
+                // Forcing raw motion removed OS mouse acceleration, making the camera
+                // pan far faster than normal play for anyone who plays with it off.
+                boolean useRaw = minecraft.options.rawMouseInput().get();
+                GLFW.glfwSetInputMode(windowHandle, GLFW.GLFW_RAW_MOUSE_MOTION, useRaw ? GLFW.GLFW_TRUE : GLFW.GLFW_FALSE);
                 rawMouseMotionChanged = true;
             }
             GLFW.glfwSetInputMode(windowHandle, GLFW.GLFW_CURSOR, GLFW.GLFW_CURSOR_DISABLED);
@@ -2607,6 +3512,7 @@ public final class PhoneScreen extends Screen {
         photoViewerMode = false;
         galleryMode = false;
         unlocked = true;
+        callRecentsMode = false;
         callAppMode = true;
         callContactsMode = false;
         callSessionMode = false;
@@ -2627,6 +3533,7 @@ public final class PhoneScreen extends Screen {
             }
             return;
         }
+        callRecentsMode = false;
         callAppMode = false;
         callContactsMode = false;
         
@@ -2644,11 +3551,16 @@ public final class PhoneScreen extends Screen {
         unlocked = true;
         callAppMode = false;
         callContactsMode = false;
-        
         callSessionMode = false;
         addContactMode = false;
         chatAppMode = true;
         chatThreadMode = false;
+        chatAddSelectorMode = false;
+        chatAddSelectorScrollOffset = 0;
+        chatTab = 0;
+        chatAddMenuOpen = false;
+        chatNicknameEditMode = false;
+        chatScanActive = false;
         bankAppMode = false;
         clearChatDeleteMenu();
         if (!activeChatNumber.isEmpty() && activeChatName.isBlank()) {
@@ -2658,8 +3570,19 @@ public final class PhoneScreen extends Screen {
     }
 
     private void closeChatApp() {
+        if (cameraMode) {
+            // Leaving while the QR scanner is open must not fall through to the camera app.
+            closeCamera();
+            cameraMode = false;
+        }
         chatAppMode = false;
         chatThreadMode = false;
+        chatScanActive = false;
+        chatQrShowMode = false;
+        chatAddMenuOpen = false;
+        chatAddSelectorMode = false;
+        chatScanHoverTargetId = null;
+        chatScanHoverTicks = 0;
         chatFriendNumber = "";
         chatDraft = "";
         activeChatNumber = "";
@@ -2803,9 +3726,13 @@ public final class PhoneScreen extends Screen {
     }
 
     private void showBankReceiveQrToWorld() {
+        showBankReceiveQrToWorld(false);
+    }
+
+    private void showBankReceiveQrToWorld(boolean chat) {
         setBankReceiveActive(true);
         closingForBankReceiveWorld = true;
-        PhoneClientHooks.showBankReceiveQrToWorld(openHand);
+        PhoneClientHooks.showBankReceiveQrToWorld(openHand, chat);
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft != null) {
             minecraft.setScreen(null);
@@ -2831,12 +3758,19 @@ public final class PhoneScreen extends Screen {
             return;
         }
 
-        activeChatNumber = contact.number();
-        activeChatName = contact.displayName();
+        String number = contact.number();
+        String name = contact.displayName();
+        if (number == null || number.isEmpty()) {
+            return;
+        }
+        activeChatNumber = number;
+        activeChatName = name == null ? number : name;
         chatDraft = "";
         clearChatDeleteMenu();
         chatAppMode = false;
         chatThreadMode = true;
+        chatScrollOffset = 0;
+        lastObservedMessageCount = 0;
         rebuildWidgets();
     }
 
@@ -2850,6 +3784,7 @@ public final class PhoneScreen extends Screen {
             return;
         }
         callAppMode = false;
+        callRecentsMode = false;
         callContactsMode = true;
         
         callSessionMode = false;
@@ -2863,8 +3798,36 @@ public final class PhoneScreen extends Screen {
         rebuildWidgets();
     }
 
+    private void openCallRecentsPage() {
+        setBankReceiveActive(false);
+        if (isCallScreenLocked()) {
+            callAppMode = false;
+            callContactsMode = false;
+            callRecentsMode = false;
+            callSessionMode = true;
+            rebuildWidgets();
+            return;
+        }
+        callAppMode = false;
+        callContactsMode = false;
+        callRecentsMode = true;
+        recentsScrollOffset = 0;
+        
+        callSessionMode = false;
+        addContactMode = false;
+        chatAppMode = false;
+        chatThreadMode = false;
+        bankAppMode = false;
+        observedCallStateRevision = Long.MIN_VALUE;
+        requestCallSync();
+        applyCallStateFromServer();
+        PhoneNetworkingClient.requestCallLogSync();
+        rebuildWidgets();
+    }
+
     private void openAddContactPage() {
         setBankReceiveActive(false);
+        callRecentsMode = false;
         addContactMode = true;
         callAppMode = false;
         
@@ -2881,6 +3844,7 @@ public final class PhoneScreen extends Screen {
 
     private void openEditContactPage(PhoneContact contact) {
         setBankReceiveActive(false);
+        callRecentsMode = false;
         addContactMode = true;
         callAppMode = false;
         
@@ -2905,6 +3869,7 @@ public final class PhoneScreen extends Screen {
             rebuildWidgets();
             return;
         }
+        callRecentsMode = false;
         callAppMode = true;
         callContactsMode = false;
         
@@ -2935,6 +3900,7 @@ public final class PhoneScreen extends Screen {
         activeCallTicks = 0;
         callAppMode = false;
         callContactsMode = false;
+        callRecentsMode = false;
         
         callSessionMode = true;
         addContactMode = false;
@@ -2980,6 +3946,7 @@ public final class PhoneScreen extends Screen {
         activeCallTicks = 0;
         callMuted = false;
         callSpeakerEnabled = false;
+        callRecentsMode = false;
         callContactsMode = false;
         callAppMode = returnToList;
         if (!returnToList) {
@@ -3293,6 +4260,123 @@ public final class PhoneScreen extends Screen {
     private void resetBankScanHover() {
         bankScanHoverTargetId = null;
         bankScanHoverTicks = 0;
+    }
+
+    boolean isChatScanCameraMode() {
+        return chatAppMode && cameraMode && chatScanActive;
+    }
+
+    /** Opens the contact-scan camera, mirroring the bank's scan-to-pay camera setup. */
+    private void openChatScanCamera() {
+        Minecraft minecraft = Minecraft.getInstance();
+        cameraMode = true;
+        chatAppMode = true;
+        chatScanActive = true;
+        chatAddMenuOpen = false;
+        chatAddSelectorMode = false;
+        galleryMode = false;
+        photoViewerMode = false;
+        callAppMode = false;
+        callContactsMode = false;
+        callSessionMode = false;
+        chatThreadMode = false;
+        bankAppMode = false;
+        chatScanHoverTargetId = null;
+        chatScanHoverTicks = 0;
+        setCameraMoveMode(false, 0.0D, 0.0D);
+        if (minecraft != null) {
+            if (savedCameraType == null) {
+                savedCameraType = minecraft.options.getCameraType();
+            }
+            if (savedCameraFov < 0) {
+                savedCameraFov = getCurrentCameraFov(minecraft);
+            }
+            selfieCameraMode = false;
+            cameraZoomLevel = 0;
+            cameraZoomFactor = 1.0F;
+            cameraZoomIndicatorTicks = 0;
+            minecraft.options.setCameraType(CameraType.FIRST_PERSON);
+            applyCameraZoom(minecraft);
+        }
+        rebuildWidgets();
+    }
+
+    /** Closes the contact-scan camera and returns to the Add Friend page. */
+    private void closeChatScanCamera() {
+        closeCamera();
+        cameraMode = false;
+        chatAppMode = true;
+        chatScanActive = false;
+        chatAddMenuOpen = true;
+        chatScanHoverTargetId = null;
+        chatScanHoverTicks = 0;
+        rebuildWidgets();
+    }
+
+    /** Shows this player's contact QR so a friend can scan them, like the bank's QR Receive page. */
+    private void openChatQrPage() {
+        closeCamera();
+        cameraMode = false;
+        chatAppMode = true;
+        chatScanActive = false;
+        chatAddMenuOpen = false;
+        chatQrShowMode = true;
+        chatScanHoverTargetId = null;
+        chatScanHoverTicks = 0;
+        rebuildWidgets();
+    }
+
+    private void closeChatQrPage() {
+        chatQrShowMode = false;
+        chatAddMenuOpen = true;
+        rebuildWidgets();
+    }
+
+    /** Adds the aimed player as a chat friend, like the bank's click-to-scan. */
+    private void tryScanChatTarget() {
+        Player targetPlayer = getBankScanTargetPlayer();
+        if (targetPlayer == null) {
+            chatScanHoverTargetId = null;
+            chatScanHoverTicks = 0;
+            return;
+        }
+        completeChatScan(targetPlayer.getUUID());
+    }
+
+    private void completeChatScan(UUID targetId) {
+        String friendNum = getPlayerPhoneNumber(targetId);
+        closeCamera();
+        cameraMode = false;
+        chatScanActive = false;
+        chatAddMenuOpen = false;
+        chatTab = 0;
+        chatScanHoverTargetId = null;
+        chatScanHoverTicks = 0;
+        addChatFriend(friendNum);
+        rebuildWidgets();
+    }
+
+    private void tickChatScanHover() {
+        Player targetPlayer = getBankScanTargetPlayer();
+        if (targetPlayer == null) {
+            chatScanHoverTargetId = null;
+            chatScanHoverTicks = 0;
+            return;
+        }
+
+        UUID targetId = targetPlayer.getUUID();
+        if (!targetId.equals(chatScanHoverTargetId)) {
+            chatScanHoverTargetId = targetId;
+            chatScanHoverTicks = 1;
+            return;
+        }
+
+        if (chatScanHoverTicks < 15) {
+            chatScanHoverTicks++;
+            return;
+        }
+
+        completeChatScan(targetId);
     }
 
     private void tryScanBankPaymentTarget() {
@@ -3624,6 +4708,92 @@ public final class PhoneScreen extends Screen {
         }
 
         PhoneNetworkingClient.requestAppendPhotoMetadata(openHand, photoFileName, captureStack);
+        PhoneNetworkingClient.uploadPhoto(photoFileName);
+    }
+
+    // ── External image import / export ──────────────────────────────────────────
+
+    /** Opens the OS file picker and imports the chosen image into the gallery. */
+    void importPhotoViaDialog() {
+        importPhotoFromFile(PhoneImageIo.openImportDialog());
+    }
+
+    /** Opens the OS file picker and applies the chosen image as the current wallpaper page. */
+    void importWallpaperViaDialog() {
+        importWallpaperFromFile(PhoneImageIo.openImportDialog());
+    }
+
+    /**
+     * Reads an external image, saves it to the photo store, AND registers it in the
+     * phone's photo list so it always shows up in the Gallery — whether it was
+     * imported as a plain photo or as a wallpaper source. Shows a status toast on
+     * both success and failure so drag & drop always gives visible feedback.
+     */
+    private String importImageToGallery(Path source) {
+        if (source == null) {
+            return null;
+        }
+        if (isPhotoStorageFull()) {
+            showStatus("screen.minedevice.phone.camera.storage_full");
+            return null;
+        }
+        String fileName = photoStore.importImageFile(source);
+        if (fileName == null) {
+            showStatus("screen.minedevice.phone.status.import_failed");
+            return null;
+        }
+        ItemStack captureStack = ItemStack.EMPTY;
+        if (!appendPhotoToPhone(fileName, captureStack)) {
+            photoStore.deletePhotoFile(fileName);
+            showStatus("screen.minedevice.phone.status.import_failed");
+            return null;
+        }
+        PhoneNetworkingClient.requestAppendPhotoMetadata(openHand, fileName, captureStack);
+        PhoneNetworkingClient.uploadPhoto(fileName);
+        return fileName;
+    }
+
+    void importPhotoFromFile(Path source) {
+        if (homePhoneMode) {
+            return;
+        }
+        String fileName = importImageToGallery(source);
+        if (fileName == null) {
+            return;
+        }
+        galleryPage = 0;
+        rebuildWidgets();
+        showStatus("screen.minedevice.phone.status.photo_imported");
+    }
+
+    void importWallpaperFromFile(Path source) {
+        String fileName = importImageToGallery(source);
+        if (fileName == null) {
+            return;
+        }
+        boolean lock = settingsWallpaperPage != 2; // main page & lock page set the lock screen
+        boolean home = settingsWallpaperPage != 1; // main page & home page set the home screen
+        setWallpaperFromPhoto(fileName, lock, home);
+        showStatus("screen.minedevice.phone.status.wallpaper_updated");
+        rebuildWidgets();
+    }
+
+    /** Exports the photo currently shown in the viewer to a user-chosen location. */
+    void exportCurrentPhoto() {
+        List<PhotoEntry> photos = getPhotos();
+        if (photos.isEmpty()) {
+            return;
+        }
+        int index = Mth.clamp(viewerPhotoIndex, 0, photos.size() - 1);
+        PhotoEntry entry = photos.get(index);
+        if (!entry.hasFile()) {
+            return;
+        }
+        Path destination = PhoneImageIo.exportDialog(entry.fileName);
+        if (destination == null) {
+            return;
+        }
+        photoStore.exportPhotoFile(entry.fileName, destination);
     }
 
     private void requestPhotoCapture() {
@@ -3894,14 +5064,83 @@ public final class PhoneScreen extends Screen {
 
     void openSettingsApp() {
         settingsAppMode = true;
+        settingsPage = 0;
+        settingsColorPickerOpen = false;
+        settingsNameEditMode = false;
         settingsWallpaperPage = 0;
         rebuildWidgets();
     }
 
     void closeSettingsApp() {
         settingsAppMode = false;
+        settingsPage = 0;
+        settingsColorPickerOpen = false;
+        settingsNameEditMode = false;
         settingsWallpaperPage = 0;
         rebuildWidgets();
+    }
+
+    /** The player's chosen phone display name (nickname), falling back to their username. */
+    String getOwnDisplayName() {
+        String nickname = PhoneClientChatState.getOwnNickname();
+        if (nickname != null && !nickname.isBlank()) {
+            return nickname;
+        }
+        Minecraft minecraft = Minecraft.getInstance();
+        return minecraft.player != null ? minecraft.player.getGameProfile().getName() : "";
+    }
+
+    /** Resolves the local player's skin texture for the settings profile head. */
+    ResourceLocation getOwnSkinTexture() {
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft.getConnection() != null && minecraft.player != null) {
+            PlayerInfo info = minecraft.getConnection().getPlayerInfo(minecraft.player.getUUID());
+            if (info != null) {
+                ResourceLocation skin = getPlayerSkin(info);
+                if (skin != null) {
+                    return skin;
+                }
+            }
+        }
+        return DefaultPlayerSkin.getDefaultSkin(
+                minecraft.player != null ? minecraft.player.getUUID() : UUID.randomUUID());
+    }
+
+    void beginSettingsNameEdit() {
+        settingsNameEditMode = true;
+        settingsNameDraft = getOwnDisplayName();
+        rebuildWidgets();
+    }
+
+    void commitSettingsNameEdit() {
+        PhoneNetworkingClient.requestSetNickname(settingsNameDraft);
+        settingsNameEditMode = false;
+        rebuildWidgets();
+    }
+
+    /** Steps back one level within Settings (color picker/wallpaper picker → Appearance → category menu → close). */
+    void settingsGoBack() {
+        if (settingsNameEditMode) {
+            settingsNameEditMode = false;
+            rebuildWidgets();
+            return;
+        }
+        if (settingsColorPickerOpen) {
+            settingsColorPickerOpen = false;
+            rebuildWidgets();
+            return;
+        }
+        if (settingsWallpaperPage != 0) {
+            settingsWallpaperPage = 0;
+            rebuildWidgets();
+            return;
+        }
+        if (settingsPage != 0) {
+            settingsPage = 0;
+            rebuildWidgets();
+            return;
+        }
+        closeSettingsApp();
     }
 
     // ── Wallpaper ─────────────────────────────────────────────────────────────
@@ -3919,6 +5158,14 @@ public final class PhoneScreen extends Screen {
             return PhoneWallpaperData.resolveBuiltinTexture(key);
         }
         return null;
+    }
+
+    /** Returns the raw wallpaper key currently stored for the lock or home screen. */
+    String getWallpaperKey(boolean lockScreen) {
+        ItemStack stack = getOpenPhoneStack();
+        return lockScreen
+                ? PhoneWallpaperData.getLockWallpaper(stack)
+                : PhoneWallpaperData.getHomeWallpaper(stack);
     }
 
     /**

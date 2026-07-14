@@ -66,4 +66,36 @@ final class PhoneScreenDraw {
                 0.0F, 0.0F, textureWidth, textureHeight, textureWidth, textureHeight);
         guiGraphics.disableScissor();
     }
+
+    /**
+     * Draws a simple unlocked-padlock silhouette (body + open shackle) as solid fills
+     * in a caller-chosen color. Used instead of a texture blit because the baked
+     * unlock icon PNG is pure black and can't be recolored with a shader tint.
+     */
+    static void drawPadlockIcon(GuiGraphics guiGraphics, int x, int y, int size, int color) {
+        int bodyWidth = Math.round(size * 0.60F);
+        int bodyHeight = Math.round(size * 0.44F);
+        int bodyLeft = x + (size - bodyWidth) / 2;
+        int bodyTop = y + size - bodyHeight - Math.round(size * 0.12F);
+        int bodyBottom = bodyTop + bodyHeight;
+
+        int thickness = Math.max(1, Math.round(size * 0.12F));
+        int shackleWidth = Math.round(bodyWidth * 0.62F);
+        int shackleLeft = x + (size - shackleWidth) / 2;
+        int shackleTop = y + Math.round(size * 0.08F);
+
+        // Shackle: left bar, top bar, right bar — open ring above the lock body.
+        guiGraphics.fill(shackleLeft, shackleTop, shackleLeft + thickness, bodyTop + thickness, color);
+        guiGraphics.fill(shackleLeft, shackleTop, shackleLeft + shackleWidth, shackleTop + thickness, color);
+        guiGraphics.fill(shackleLeft + shackleWidth - thickness, shackleTop, shackleLeft + shackleWidth, bodyTop + thickness, color);
+
+        // Lock body.
+        guiGraphics.fill(bodyLeft, bodyTop, bodyLeft + bodyWidth, bodyBottom, color);
+
+        // Keyhole: a translucent dark dot that reads as a punched hole regardless of accent color.
+        int dotSize = Math.max(1, Math.round(size * 0.10F));
+        int dotX = bodyLeft + (bodyWidth - dotSize) / 2;
+        int dotY = bodyTop + Math.round(bodyHeight * 0.30F);
+        guiGraphics.fill(dotX, dotY, dotX + dotSize, dotY + dotSize, 0x77000000);
+    }
 }

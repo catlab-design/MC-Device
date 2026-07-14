@@ -36,7 +36,6 @@ public final class MegaphoneVoiceHook {
     private static final short MEGAPHONE_OUTPUT_DISTANCE = 28;
     private static final int MEGAPHONE_OUTPUT_ANGLE = 120;
     private static final int SPEAKING_GRACE_TICKS = 4;
-    private static final su.plo.slib.api.position.Pos3d MONITOR_POSITION = new su.plo.slib.api.position.Pos3d(0.0D, 0.0D, 0.0D);
 
     private static final Map<UUID, MegaphoneBridge> ACTIVE_BRIDGES = new HashMap<>();
     private static boolean initialized;
@@ -304,13 +303,7 @@ public final class MegaphoneVoiceHook {
                 outputSource.setAngle(MEGAPHONE_OUTPUT_ANGLE);
                 outputSource.addFilter(player -> !serverPlayer.getUUID().equals(resolveVoicePlayerId(player)));
 
-                ServerDirectSource monitorSource = sourceLine.createDirectSource(voicePlayer, false);
-                monitorSource.setIconVisible(false);
-                monitorSource.setCameraRelative(true);
-                monitorSource.setRelativePosition(MONITOR_POSITION);
-                monitorSource.setName("");
-
-                return new MegaphoneBridge(serverPlayer.getUUID(), outputSource, monitorSource);
+                return new MegaphoneBridge(serverPlayer.getUUID(), outputSource, null);
             } catch (Throwable throwable) {
                 Minedevice.LOGGER.warn("Unable to create megaphone voice bridge", throwable);
                 return null;
@@ -328,23 +321,8 @@ public final class MegaphoneVoiceHook {
                 outputSource.setAngle(MEGAPHONE_OUTPUT_ANGLE);
             }
 
-            if (monitorSource == null && sourceLine != null) {
-                VoiceServerPlayer voicePlayer = resolveVoicePlayer(serverPlayer.getUUID());
-                if (voicePlayer == null) {
-                    return;
-                }
+            // monitor source intentionally omitted — speaker should not hear their own voice
 
-                try {
-                    monitorSource = sourceLine.createDirectSource(voicePlayer, false);
-                    monitorSource.setIconVisible(false);
-                    monitorSource.setCameraRelative(true);
-                    monitorSource.setRelativePosition(MONITOR_POSITION);
-                    monitorSource.setName("");
-                } catch (Throwable throwable) {
-                    monitorSource = null;
-                    Minedevice.LOGGER.debug("Unable to recreate megaphone monitor source", throwable);
-                }
-            }
         }
 
         private void serverTick() {
@@ -382,17 +360,7 @@ public final class MegaphoneVoiceHook {
                 Minedevice.LOGGER.debug("Unable to broadcast megaphone audio", throwable);
             }
 
-            if (monitorSource != null) {
-                try {
-                    monitorSource.sendAudioFrame(
-                            audioPacket.getData(),
-                            audioPacket.getSequenceNumber(),
-                            activationInfo
-                    );
-                } catch (Throwable throwable) {
-                    Minedevice.LOGGER.debug("Unable to send megaphone monitor audio", throwable);
-                }
-            }
+            // monitor omitted — no self-hear
         }
 
         private void playAudioEnd(PlayerAudioEndPacket audioEndPacket) {
@@ -406,13 +374,7 @@ public final class MegaphoneVoiceHook {
                 Minedevice.LOGGER.debug("Unable to end megaphone broadcast audio", throwable);
             }
 
-            if (monitorSource != null) {
-                try {
-                    monitorSource.sendAudioEnd(audioEndPacket.getSequenceNumber());
-                } catch (Throwable throwable) {
-                    Minedevice.LOGGER.debug("Unable to end megaphone monitor audio", throwable);
-                }
-            }
+            // monitor omitted — no self-hear
         }
 
         private void close() {
@@ -429,15 +391,7 @@ public final class MegaphoneVoiceHook {
                 Minedevice.LOGGER.debug("Unable to remove megaphone static source", throwable);
             }
 
-            if (monitorSource != null) {
-                try {
-                    monitorSource.remove();
-                } catch (Throwable throwable) {
-                    Minedevice.LOGGER.debug("Unable to remove megaphone monitor source", throwable);
-                } finally {
-                    monitorSource = null;
-                }
-            }
+            // monitor omitted — no self-hear
         }
     }
 

@@ -192,7 +192,7 @@ public final class ChatStorageManager {
             ));
         }
 
-        return new PhoneChatStatePayload(friendEntries, conversationEntries);
+        return new PhoneChatStatePayload(getOwnNickname(ownerUuid), friendEntries, conversationEntries);
     }
 
     public boolean isRunning() {
@@ -220,5 +220,18 @@ public final class ChatStorageManager {
             cache.restorePendingOperations(operations);
             System.err.println("Error saving chat batch: " + exception.getMessage());
         }
+    }
+
+    public String getOwnNickname(UUID ownerUuid) {
+        return database.getNickname(ownerUuid);
+    }
+
+    public void setOwnNickname(UUID ownerUuid, String nickname) {
+        database.setNickname(ownerUuid, nickname);
+    }
+
+    public void updateFriendProfileId(UUID playerUuid, String phoneNumber) {
+        database.updateFriendProfileId(playerUuid, phoneNumber);
+        cache.updateCachedFriendProfileId(playerUuid, phoneNumber);
     }
 }

@@ -70,6 +70,22 @@ public final class AtmAccountStore extends SavedData {
         return nextBalance;
     }
 
+    /** Directly sets a player's balance (used by admin commands). Negative values clamp to 0. */
+    public long setBalance(UUID playerId, long amount) {
+        if (playerId == null) {
+            return 0L;
+        }
+
+        long clamped = Math.max(0L, amount);
+        if (clamped <= 0L) {
+            balances.remove(playerId);
+        } else {
+            balances.put(playerId, clamped);
+        }
+        setDirty();
+        return clamped;
+    }
+
     public boolean withdraw(UUID playerId, long amount) {
         if (playerId == null || amount <= 0L) {
             return false;

@@ -45,11 +45,17 @@ public final class ModItems {
     public static final RegistrySupplier<Item> BILL1000 = ITEMS.register("bill1000",
             () -> new Item(new Item.Properties()));
 
+    public static final RegistrySupplier<Item> COIN = ITEMS.register("coin",
+            () -> new Item(new Item.Properties()));
+
     public static final RegistrySupplier<Item> ATM = ITEMS.register("atm",
             () -> new BlockItem(ModBlocks.ATM.get(), new Item.Properties().stacksTo(1)));
 
     public static final RegistrySupplier<Item> BANK = ITEMS.register("bank",
             () -> new BlockItem(ModBlocks.BANK.get(), new Item.Properties().stacksTo(1)));
+
+    public static final RegistrySupplier<Item> LABTOP = ITEMS.register("labtop",
+            () -> new BlockItem(ModBlocks.LABTOP.get(), new Item.Properties().stacksTo(1)));
 
     public static final RegistrySupplier<Item> CARD = ITEMS.register("card",
             () -> new CardItem(new Item.Properties().stacksTo(1)));

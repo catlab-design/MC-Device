@@ -15,6 +15,6 @@ public final class MinedeviceForge {
         IEventBus modEventBus = context.getModEventBus();
         EventBuses.registerModEventBus(Minedevice.MOD_ID, modEventBus);
         Minedevice.init();
-        DistExecutor.safeRunWhenOn(Dist.CLIENT, () -> () -> MinedeviceForgeClient.register(modEventBus));
+        DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> MinedeviceForgeClient.register(modEventBus));
     }
 }

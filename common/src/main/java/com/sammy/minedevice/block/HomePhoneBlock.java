@@ -131,6 +131,9 @@ public final class HomePhoneBlock extends HorizontalDirectionalBlock implements 
         return InteractionResult.sidedSuccess(level.isClientSide);
     }
 
+    // No playerWillDestroy override: the block's loot table already drops exactly one
+    // home_phone. Manually popping another here caused it to drop two.
+
     @Override
     public void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean isMoving) {
         if (!state.is(newState.getBlock()) && !level.isClientSide && level instanceof ServerLevel serverLevel) {

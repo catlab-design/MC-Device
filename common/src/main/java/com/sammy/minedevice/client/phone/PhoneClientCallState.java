@@ -1,11 +1,13 @@
 package com.sammy.minedevice.client.phone;
 
+import com.sammy.minedevice.phone.CallLogEntry;
 import com.sammy.minedevice.phone.PhoneCallState;
 import com.sammy.minedevice.phone.PhoneData;
 import net.minecraft.core.BlockPos;
 
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -34,6 +36,19 @@ public final class PhoneClientCallState {
             return mobileMuted;
         }
         return homePhoneMuted.getOrDefault(blockPos, false);
+    }
+
+    /** True if this player's own currently-connected call is muted (mobile or a home phone). */
+    public static boolean isSelfMuted() {
+        if (mobileState.state() == PhoneCallState.CONNECTED) {
+            return mobileMuted;
+        }
+        for (Map.Entry<BlockPos, CallSnapshot> entry : homePhoneStates.entrySet()) {
+            if (entry.getValue().state() == PhoneCallState.CONNECTED) {
+                return homePhoneMuted.getOrDefault(entry.getKey(), false);
+            }
+        }
+        return false;
     }
 
     public static void setSpeakerEnabled(BlockPos blockPos, boolean enabled) {
@@ -167,6 +182,22 @@ public final class PhoneClientCallState {
 
         long elapsedMillis = Math.max(0L, System.currentTimeMillis() - snapshot.connectedSinceMillis());
         return (int) Math.min(Integer.MAX_VALUE, (elapsedMillis * 20L) / 1000L);
+    }
+
+    private static List<CallLogEntry> callLogEntries = List.of();
+    private static long callLogRevision;
+
+    public static void setCallLogEntries(List<CallLogEntry> entries) {
+        callLogEntries = entries == null ? List.of() : List.copyOf(entries);
+        callLogRevision++;
+    }
+
+    public static List<CallLogEntry> getCallLogEntries() {
+        return callLogEntries;
+    }
+
+    public static long getCallLogRevision() {
+        return callLogRevision;
     }
 
     private record CallSnapshot(PhoneCallState state, String otherNumber, String otherName, UUID otherProfileId,

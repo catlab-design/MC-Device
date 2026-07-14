@@ -35,6 +35,13 @@ public final class ChatDatabase {
         )
         """;
 
+    private static final String CREATE_NICKNAMES_TABLE = """
+        CREATE TABLE IF NOT EXISTS owner_nicknames (
+            owner_uuid TEXT PRIMARY KEY,
+            nickname TEXT NOT NULL DEFAULT ''
+        )
+        """;
+
     private static final String CREATE_MESSAGES_INDEX =
             "CREATE INDEX IF NOT EXISTS idx_messages_owner_number_time ON chat_messages(owner_uuid, other_number, timestamp DESC)";
     private static final String CREATE_FRIENDS_INDEX =
@@ -60,6 +67,7 @@ public final class ChatDatabase {
             stmt.execute("PRAGMA busy_timeout=3000");
             stmt.execute(CREATE_FRIENDS_TABLE);
             stmt.execute(CREATE_MESSAGES_TABLE);
+            stmt.execute(CREATE_NICKNAMES_TABLE);
             stmt.execute(CREATE_MESSAGES_INDEX);
             stmt.execute(CREATE_FRIENDS_INDEX);
         }
@@ -356,5 +364,57 @@ public final class ChatDatabase {
     }
 
     public record StoredFriend(String displayName, String number, UUID profileId) {
+    }
+
+    public String getNickname(UUID ownerUuid) {
+        dbLock.readLock().lock();
+        try {
+            String sql = "SELECT nickname FROM owner_nicknames WHERE owner_uuid = ?";
+            try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
+                pstmt.setString(1, ownerUuid.toString());
+                try (ResultSet rs = pstmt.executeQuery()) {
+                    if (rs.next()) {
+                        return rs.getString("nickname");
+                    }
+                }
+            }
+        } catch (SQLException e) {
+            // ignore
+        } finally {
+            dbLock.readLock().unlock();
+        }
+        return "";
+    }
+
+    public void setNickname(UUID ownerUuid, String nickname) {
+        dbLock.writeLock().lock();
+        try {
+            String sql = "INSERT OR REPLACE INTO owner_nicknames (owner_uuid, nickname) VALUES (?, ?)";
+            try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
+                pstmt.setString(1, ownerUuid.toString());
+                pstmt.setString(2, nickname != null ? nickname : "");
+                pstmt.executeUpdate();
+            }
+        } catch (SQLException e) {
+            // ignore
+        } finally {
+            dbLock.writeLock().unlock();
+        }
+    }
+
+    public void updateFriendProfileId(UUID joinedPlayerUuid, String phoneNumber) {
+        dbLock.writeLock().lock();
+        try {
+            String sql = "UPDATE chat_friends SET profile_id = ? WHERE friend_number = ? AND profile_id IS NULL";
+            try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
+                pstmt.setString(1, joinedPlayerUuid.toString());
+                pstmt.setString(2, phoneNumber);
+                pstmt.executeUpdate();
+            }
+        } catch (SQLException e) {
+            // ignore
+        } finally {
+            dbLock.writeLock().unlock();
+        }
     }
 }
