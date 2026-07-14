@@ -3,6 +3,7 @@ package com.sammy.minedevice;
 import com.mojang.logging.LogUtils;
 import com.sammy.minedevice.airstrike.AirstrikeManager;
 import com.sammy.minedevice.atm.AtmNetworking;
+import com.sammy.minedevice.phone.CallLogStorageManager;
 import com.sammy.minedevice.phone.ChatStorageManager;
 import com.sammy.minedevice.phone.PhoneNetworking;
 import com.sammy.minedevice.walkie.WalkieNetworking;
@@ -48,7 +49,10 @@ public final class Minedevice {
 
         chatLifecycleRegistered = true;
         LifecycleEvent.SERVER_STARTED.register(server -> initChatStorage());
-        LifecycleEvent.SERVER_STOPPING.register(server -> ChatStorageManager.shutdown());
+        LifecycleEvent.SERVER_STOPPING.register(server -> {
+            ChatStorageManager.shutdown();
+            CallLogStorageManager.shutdown();
+        });
     }
 
     private static void initChatStorage() {
@@ -62,6 +66,9 @@ public final class Minedevice {
 
             ChatStorageManager.init(dbPath);
             ChatStorageManager.getInstance().start();
+
+            String callLogDbPath = new File(gameDir, "minedevice_call_log.db").getAbsolutePath();
+            CallLogStorageManager.init(callLogDbPath);
 
             LOGGER.info("Chat storage system initialized with SQLite database");
         } catch (Exception e) {

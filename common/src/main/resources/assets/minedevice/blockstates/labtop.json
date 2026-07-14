@@ -1,0 +1,21 @@
+{
+  "variants": {
+    "facing=north,is_screen=false,monitor_open=false": { "model": "minedevice:block/labtop_base" },
+    "facing=north,is_screen=false,monitor_open=true": { "model": "minedevice:block/labtop_base" },
+    "facing=east,is_screen=false,monitor_open=false": { "model": "minedevice:block/labtop_base", "y": 90 },
+    "facing=east,is_screen=false,monitor_open=true": { "model": "minedevice:block/labtop_base", "y": 90 },
+    "facing=south,is_screen=false,monitor_open=false": { "model": "minedevice:block/labtop_base", "y": 180 },
+    "facing=south,is_screen=false,monitor_open=true": { "model": "minedevice:block/labtop_base", "y": 180 },
+    "facing=west,is_screen=false,monitor_open=false": { "model": "minedevice:block/labtop_base", "y": 270 },
+    "facing=west,is_screen=false,monitor_open=true": { "model": "minedevice:block/labtop_base", "y": 270 },
+    
+    "facing=north,is_screen=true,monitor_open=false": { "model": "minedevice:block/labtop_screen" },
+    "facing=north,is_screen=true,monitor_open=true": { "model": "minedevice:block/labtop_screen" },
+    "facing=east,is_screen=true,monitor_open=false": { "model": "minedevice:block/labtop_screen" },
+    "facing=east,is_screen=true,monitor_open=true": { "model": "minedevice:block/labtop_screen" },
+    "facing=south,is_screen=true,monitor_open=false": { "model": "minedevice:block/labtop_screen" },
+    "facing=south,is_screen=true,monitor_open=true": { "model": "minedevice:block/labtop_screen" },
+    "facing=west,is_screen=true,monitor_open=false": { "model": "minedevice:block/labtop_screen" },
+    "facing=west,is_screen=true,monitor_open=true": { "model": "minedevice:block/labtop_screen" }
+  }
+}

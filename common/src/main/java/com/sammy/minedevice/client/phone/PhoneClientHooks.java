@@ -3,6 +3,7 @@ package com.sammy.minedevice.client.phone;
 import com.mojang.blaze3d.platform.InputConstants;
 import com.sammy.minedevice.ModItems;
 import com.sammy.minedevice.client.homephone.HomePhoneScreen;
+import com.sammy.minedevice.client.labtop.LabtopScreen;
 import com.sammy.minedevice.phone.PhoneCallPoseAccess;
 import com.sammy.minedevice.phone.PhoneCallState;
 import net.minecraft.client.Minecraft;
@@ -20,6 +21,7 @@ public final class PhoneClientHooks {
     private static boolean mobileCallSlotLockOffhand;
     private static int mobileCallLockedHotbarSlot = -1;
     private static boolean bankReceiveWorldActive;
+    private static boolean bankReceiveWorldIsChat;
     private static boolean bankReceiveEscDown;
     private static InteractionHand bankReceiveWorldHand = InteractionHand.MAIN_HAND;
 
@@ -40,6 +42,13 @@ public final class PhoneClientHooks {
         }
     }
 
+    public static void openLabtopScreen(BlockPos blockPos) {
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft != null) {
+            minecraft.setScreen(new LabtopScreen(blockPos));
+        }
+    }
+
     public static boolean shouldHideCrosshair() {
         PhoneScreen phoneScreen = getOpenPhoneScreen();
         return phoneScreen != null && phoneScreen.isCameraModeActive();
@@ -50,7 +59,8 @@ public final class PhoneClientHooks {
         if (entity instanceof Player player && player != localPlayer) {
             return (PhoneCallPoseAccess.isPhoneCallPoseActive(player)
                     || PhoneCallPoseAccess.isPhoneCameraPoseActive(player)
-                    || PhoneCallPoseAccess.isPhoneBankQrPoseActive(player))
+                    || PhoneCallPoseAccess.isPhoneBankQrPoseActive(player)
+                    || PhoneCallPoseAccess.isPhoneChatQrPoseActive(player))
                     && (isPhone(player.getMainHandItem()) || isPhone(player.getOffhandItem()));
         }
 
@@ -147,7 +157,8 @@ public final class PhoneClientHooks {
             }
         }
 
-        if (PhoneCallPoseAccess.isPhoneBankQrPoseActive(player)) {
+        if (PhoneCallPoseAccess.isPhoneBankQrPoseActive(player)
+                || PhoneCallPoseAccess.isPhoneChatQrPoseActive(player)) {
             if (isPhone(player.getOffhandItem())) {
                 return player.getMainArm().getOpposite();
             }
@@ -204,6 +215,7 @@ public final class PhoneClientHooks {
         if (entity instanceof Player player && player != localPlayer) {
             return PhoneCallPoseAccess.isPhoneScreenOnActive(player)
                     && !PhoneCallPoseAccess.isPhoneBankQrPoseActive(player)
+                    && !PhoneCallPoseAccess.isPhoneChatQrPoseActive(player)
                     && !PhoneCallPoseAccess.isPhoneCallPoseActive(player)
                     && (isPhone(player.getMainHandItem()) || isPhone(player.getOffhandItem()));
         }
@@ -231,7 +243,23 @@ public final class PhoneClientHooks {
             return false;
         }
 
-        return bankReceiveWorldActive
+        return bankReceiveWorldActive && !bankReceiveWorldIsChat
+                && (isPhone(localPlayer.getMainHandItem()) || isPhone(localPlayer.getOffhandItem())
+                        || hasPhoneInHotbar(localPlayer));
+    }
+
+    public static boolean shouldUseChatQrModel(LivingEntity entity) {
+        LocalPlayer localPlayer = getLocalPlayer();
+        if (entity instanceof Player player && player != localPlayer) {
+            return PhoneCallPoseAccess.isPhoneChatQrPoseActive(player)
+                    && (isPhone(player.getMainHandItem()) || isPhone(player.getOffhandItem()));
+        }
+
+        if (localPlayer == null || entity != localPlayer) {
+            return false;
+        }
+
+        return bankReceiveWorldActive && bankReceiveWorldIsChat
                 && (isPhone(localPlayer.getMainHandItem()) || isPhone(localPlayer.getOffhandItem())
                         || hasPhoneInHotbar(localPlayer));
     }
@@ -306,12 +334,17 @@ public final class PhoneClientHooks {
     }
 
     public static void showBankReceiveQrToWorld(InteractionHand hand) {
+        showBankReceiveQrToWorld(hand, false);
+    }
+
+    public static void showBankReceiveQrToWorld(InteractionHand hand, boolean chat) {
         Minecraft minecraft = Minecraft.getInstance();
         bankReceiveWorldActive = true;
+        bankReceiveWorldIsChat = chat;
         bankReceiveWorldHand = hand == null ? InteractionHand.MAIN_HAND : hand;
         ensureBankReceivePhoneSelected(minecraft);
         bankReceiveEscDown = minecraft != null && isEscapeDown(minecraft);
-        PhoneNetworkingClient.requestBankReceiveState(true);
+        PhoneNetworkingClient.requestBankReceiveState(true, chat);
     }
 
     public static void tickBankReceiveWorld(Minecraft minecraft) {
@@ -342,9 +375,10 @@ public final class PhoneClientHooks {
 
     public static void clearBankReceiveWorldState(boolean notifyServer) {
         if (bankReceiveWorldActive && notifyServer) {
-            PhoneNetworkingClient.requestBankReceiveState(false);
+            PhoneNetworkingClient.requestBankReceiveState(false, bankReceiveWorldIsChat);
         }
         bankReceiveWorldActive = false;
+        bankReceiveWorldIsChat = false;
         bankReceiveEscDown = false;
         bankReceiveWorldHand = InteractionHand.MAIN_HAND;
     }

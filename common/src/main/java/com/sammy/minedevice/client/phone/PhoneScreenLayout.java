@@ -138,7 +138,7 @@ final class PhoneScreenLayout {
     }
 
     UiRect callSurfaceBounds() {
-        int horizontalInset = Math.max(1, Math.round(1 * scale));
+        int horizontalInset = 0;
         int topInset = Math.max(7, Math.round(9 * scale));
         int bottomInset = Math.max(18, Math.round(20 * scale));
         return new UiRect(
@@ -176,19 +176,25 @@ final class PhoneScreenLayout {
 
     UiRect callDialMenuBounds() {
         UiRect contentBounds = callSurfaceBounds();
-        int iconSize = Math.max(14, Math.round(18 * scale));
-        int gap = Math.max(8, Math.round(10 * scale));
-        int totalWidth = (iconSize * 2) + gap;
+        int iconSize = Math.max(16, Math.round(20 * scale));
+        int gap = Math.max(10, Math.round(12 * scale));
+        int totalWidth = (iconSize * 3) + (gap * 2);
         int groupStartX = contentBounds.left + Math.max(0, (contentBounds.width - totalWidth) / 2);
         int iconX = groupStartX;
         int iconY = contentBounds.bottom() - iconSize - Math.max(3, Math.round(5 * scale));
         return new UiRect(iconX, iconY, iconSize, iconSize);
     }
 
-    UiRect callListMenuBounds() {
+    UiRect callRecentsMenuBounds() {
         UiRect dialBounds = callDialMenuBounds();
-        int gap = Math.max(8, Math.round(10 * scale));
+        int gap = Math.max(10, Math.round(12 * scale));
         return new UiRect(dialBounds.right() + gap, dialBounds.top, dialBounds.width, dialBounds.height);
+    }
+
+    UiRect callListMenuBounds() {
+        UiRect recentsBounds = callRecentsMenuBounds();
+        int gap = Math.max(10, Math.round(12 * scale));
+        return new UiRect(recentsBounds.right() + gap, recentsBounds.top, recentsBounds.width, recentsBounds.height);
     }
 
     UiRect addContactHeaderButtonBounds() {
@@ -203,7 +209,7 @@ final class PhoneScreenLayout {
     UiRect callNumberDisplayBounds() {
         UiRect contentBounds = callSurfaceBounds();
         int displayTop = contentBounds.top + callHeaderHeight() + Math.max(1, Math.round(1 * scale));
-        int numberHeight = Math.max(20, Math.round(24 * scale));
+        int numberHeight = Math.max(30, Math.round(36 * scale));
         int horizontalPadding = Math.max(2, Math.round(2 * scale));
         return new UiRect(contentBounds.left + horizontalPadding, displayTop,
                 contentBounds.width - (horizontalPadding * 2), numberHeight);
@@ -219,7 +225,7 @@ final class PhoneScreenLayout {
     }
 
     int callMenuBottomReserve() {
-        return Math.max(20, Math.round(24 * scale));
+        return Math.max(30, Math.round(36 * scale));
     }
 
     UiRect dialPadCellBounds(int index) {
@@ -320,7 +326,7 @@ final class PhoneScreenLayout {
         int titleHeight = Math.max(18, Math.round(22 * scale));
         int topPadding = Math.max(12, Math.round(14 * scale));
         int bottomPadding = Math.max(12, Math.round(14 * scale));
-        int gap = Math.max(8, Math.round(10 * scale));
+        int gap = Math.max(10, Math.round(12 * scale));
         int buttonGap = Math.max(12, Math.round(14 * scale));
         int buttonHeight = Math.max(12, Math.round(14 * scale));
         int contentHeight = topPadding + titleHeight + gap + fieldHeight + gap + fieldHeight + buttonGap + buttonHeight + bottomPadding;
@@ -335,7 +341,7 @@ final class PhoneScreenLayout {
         int innerInset = Math.max(8, Math.round(10 * scale));
         int titleHeight = Math.max(18, Math.round(22 * scale));
         int topPadding = Math.max(12, Math.round(14 * scale));
-        int gap = Math.max(8, Math.round(10 * scale));
+        int gap = Math.max(10, Math.round(12 * scale));
         int top = popupBounds.top + topPadding + titleHeight + gap;
         return new UiRect(popupBounds.left + innerInset, top,
                 popupBounds.width - (innerInset * 2), fieldHeight);
@@ -343,7 +349,7 @@ final class PhoneScreenLayout {
 
     UiRect addContactNumberBounds() {
         UiRect nameBounds = addContactNameBounds();
-        int gap = Math.max(8, Math.round(10 * scale));
+        int gap = Math.max(10, Math.round(12 * scale));
         int fieldHeight = Math.max(14, Math.round(16 * scale));
         return new UiRect(nameBounds.left, nameBounds.bottom() + gap,
                 nameBounds.width, fieldHeight);

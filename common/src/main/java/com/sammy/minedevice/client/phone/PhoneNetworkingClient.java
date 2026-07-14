@@ -7,6 +7,7 @@ import com.sammy.minedevice.block.entity.HomePhoneBlockEntity;
 import com.sammy.minedevice.client.homephone.HomePhoneDialingSound;
 import com.sammy.minedevice.client.homephone.HomePhoneRingSound;
 import com.sammy.minedevice.homephone.HomePhoneRingState;
+import com.sammy.minedevice.phone.CallLogEntry;
 import com.sammy.minedevice.phone.PhoneCallState;
 import com.sammy.minedevice.phone.PhoneData;
 import com.sammy.minedevice.phone.PhoneNetworking;
@@ -24,6 +25,8 @@ import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.entity.player.Player;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 import java.util.HashMap;
@@ -89,11 +92,37 @@ public final class PhoneNetworkingClient {
             });
         });
 
+        NetworkManager.registerReceiver(NetworkManager.s2c(), PhoneNetworking.CALL_LOG_SYNC, (buf, context) -> {
+            buf.readBoolean(); // homePhone
+            int count = buf.readInt();
+            List<CallLogEntry> entries = new ArrayList<>(count);
+            for (int i = 0; i < count; i++) {
+                String number = buf.readUtf(PhoneData.PHONE_NUMBER_LENGTH);
+                String name = buf.readUtf(PhoneData.MAX_CONTACT_NAME_LENGTH);
+                String type = buf.readUtf(16);
+                long timestamp = buf.readLong();
+                int duration = buf.readInt();
+                entries.add(new CallLogEntry(0L, number, name, type, timestamp, duration));
+            }
+            context.queue(() -> PhoneClientCallState.setCallLogEntries(entries));
+        });
+
         NetworkManager.registerReceiver(NetworkManager.s2c(), PhoneNetworking.CHAT_TOAST, (buf, context) -> {
             String senderName = buf.readUtf(PhoneData.MAX_CONTACT_NAME_LENGTH);
             String senderNumber = buf.readUtf(PhoneData.PHONE_NUMBER_LENGTH);
             String messagePreview = buf.readUtf(com.sammy.minedevice.phone.PhoneChatData.MAX_MESSAGE_LENGTH);
             context.queue(() -> {
+                net.minecraft.client.gui.screens.Screen currentScreen = Minecraft.getInstance().screen;
+                if (currentScreen instanceof PhoneScreen phoneScreen) {
+                    if (phoneScreen.chatThreadMode && phoneScreen.activeChatNumber != null) {
+                        String normSender = PhoneData.normalizePhoneNumber(senderNumber);
+                        String normActive = PhoneData.normalizePhoneNumber(phoneScreen.activeChatNumber);
+                        if (normSender.equals(normActive)) {
+                            return;
+                        }
+                    }
+                }
+
                 Component senderLabel = senderName.isBlank()
                         ? Component.literal(senderNumber)
                         : Component.literal(senderName);
@@ -101,6 +130,14 @@ public final class PhoneNetworkingClient {
                         Component.translatable("toast.minedevice.phone.chat.title"),
                         Component.translatable("toast.minedevice.phone.chat.body", senderLabel, messagePreview)
                 );
+
+                if (Minecraft.getInstance().player != null) {
+                    Minecraft.getInstance().player.sendSystemMessage(Component.translatable(
+                            "screen.minedevice.phone.chat.status.incoming_from",
+                            senderLabel,
+                            senderNumber
+                    ));
+                }
             });
         });
 
@@ -318,6 +355,12 @@ public final class PhoneNetworkingClient {
         NetworkManager.sendToServer(PhoneNetworking.CHAT_FRIEND_ADD, buf);
     }
 
+    public static void requestSetNickname(String nickname) {
+        RegistryFriendlyByteBuf buf = NetworkBufferUtils.create();
+        buf.writeUtf(nickname != null ? nickname : "", PhoneData.MAX_CONTACT_NAME_LENGTH);
+        NetworkManager.sendToServer(PhoneNetworking.CHAT_SET_NICKNAME, buf);
+    }
+
     public static void requestDeleteChatConversation(String number) {
         RegistryFriendlyByteBuf buf = NetworkBufferUtils.create();
         buf.writeUtf(PhoneData.normalizePhoneNumber(number), PhoneData.PHONE_NUMBER_LENGTH);
@@ -354,6 +397,14 @@ public final class PhoneNetworkingClient {
         NetworkManager.sendToServer(PhoneNetworking.PHOTO_DELETE, buf);
     }
 
+    public static void requestCallLogSync() {
+        sendWithoutPayload(PhoneNetworking.CALL_LOG_SYNC_REQUEST, null);
+    }
+
+    public static void requestCallLogSync(BlockPos homePhonePos) {
+        sendWithoutPayload(PhoneNetworking.CALL_LOG_SYNC_REQUEST, homePhonePos);
+    }
+
     public static void requestBankSync() {
         NetworkManager.sendToServer(PhoneNetworking.BANK_SYNC_REQUEST, NetworkBufferUtils.create());
     }
@@ -366,8 +417,13 @@ public final class PhoneNetworkingClient {
     }
 
     public static void requestBankReceiveState(boolean active) {
+        requestBankReceiveState(active, false);
+    }
+
+    public static void requestBankReceiveState(boolean active, boolean chat) {
         RegistryFriendlyByteBuf buf = NetworkBufferUtils.create();
         buf.writeBoolean(active);
+        buf.writeBoolean(chat);
         NetworkManager.sendToServer(PhoneNetworking.BANK_RECEIVE_STATE, buf);
     }
 

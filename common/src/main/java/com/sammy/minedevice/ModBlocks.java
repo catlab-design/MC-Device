@@ -2,6 +2,7 @@ package com.sammy.minedevice;
 
 import com.sammy.minedevice.block.AtmBlock;
 import com.sammy.minedevice.block.HomePhoneBlock;
+import com.sammy.minedevice.block.LabtopBlock;
 import dev.architectury.registry.registries.DeferredRegister;
 import dev.architectury.registry.registries.RegistrySupplier;
 import net.minecraft.core.registries.Registries;
@@ -16,7 +17,7 @@ public final class ModBlocks {
     public static final RegistrySupplier<Block> HOME_PHONE = BLOCKS.register("home_phone",
             () -> new HomePhoneBlock(BlockBehaviour.Properties.of()
                     .mapColor(MapColor.COLOR_BLACK)
-                    .strength(0.8F)
+                    .strength(0.0F)
                     .sound(SoundType.METAL)
                     .noOcclusion()));
 
@@ -24,6 +25,13 @@ public final class ModBlocks {
             () -> new AtmBlock(BlockBehaviour.Properties.of()
                     .mapColor(MapColor.COLOR_GRAY)
                     .strength(1.5F)
+                    .sound(SoundType.METAL)
+                    .noOcclusion()));
+
+    public static final RegistrySupplier<Block> LABTOP = BLOCKS.register("labtop",
+            () -> new LabtopBlock(BlockBehaviour.Properties.of()
+                    .mapColor(MapColor.COLOR_GRAY)
+                    .strength(0.0F)
                     .sound(SoundType.METAL)
                     .noOcclusion()));
 

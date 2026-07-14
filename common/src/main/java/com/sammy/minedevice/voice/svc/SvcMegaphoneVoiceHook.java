@@ -2,14 +2,11 @@ package com.sammy.minedevice.voice.svc;
 
 import com.sammy.minedevice.Minedevice;
 import com.sammy.minedevice.item.MegaphoneItem;
-import de.maxhenkel.voicechat.api.VoicechatConnection;
 import de.maxhenkel.voicechat.api.VoicechatServerApi;
 import de.maxhenkel.voicechat.api.audiochannel.LocationalAudioChannel;
 import de.maxhenkel.voicechat.api.audiochannel.StaticAudioChannel;
 import de.maxhenkel.voicechat.api.events.MicrophonePacketEvent;
 import de.maxhenkel.voicechat.api.packets.MicrophonePacket;
-import de.maxhenkel.voicechat.api.opus.OpusDecoder;
-import de.maxhenkel.voicechat.api.opus.OpusEncoder;
 import dev.architectury.event.events.common.TickEvent;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
@@ -171,13 +168,7 @@ public final class SvcMegaphoneVoiceHook {
                 channel.setDistance(MEGAPHONE_OUTPUT_DISTANCE);
                 channel.setFilter(player -> !serverPlayer.getUUID().equals(player.getUuid()));
 
-                VoicechatConnection connection = serverApi.getConnectionOf(serverPlayer.getUUID());
-                StaticAudioChannel monitorChannel = connection == null ? null : serverApi.createStaticAudioChannel(
-                        UUID.randomUUID(),
-                        connection.getPlayer().getServerLevel(),
-                        connection
-                );
-                return new MegaphoneBridge(serverPlayer.getUUID(), server, channel, monitorChannel);
+                return new MegaphoneBridge(serverPlayer.getUUID(), server, channel, null);
             } catch (Throwable throwable) {
                 Minedevice.LOGGER.warn("Unable to create SVC megaphone voice bridge", throwable);
                 return null;
@@ -219,9 +210,7 @@ public final class SvcMegaphoneVoiceHook {
             try {
                 MicrophonePacket packet = event.getPacket();
                 outputChannel.send(packet);
-                if (monitorChannel != null) {
-                    monitorChannel.send(packet);
-                }
+                // monitor omitted — no self-hear
             } catch (Throwable throwable) {
                 Minedevice.LOGGER.debug("Unable to broadcast megaphone audio via SVC", throwable);
             }
@@ -235,7 +224,7 @@ public final class SvcMegaphoneVoiceHook {
             closed = true;
             speakingTicksRemaining = 0;
             outputChannel = null;
-            monitorChannel = null;
+
         }
     }
 }

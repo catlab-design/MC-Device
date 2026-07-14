@@ -42,6 +42,7 @@ public final class PhoneNetworking {
     public static final ResourceLocation CHAT_MESSAGE_SEND = id("phone_chat_message_send");
     public static final ResourceLocation CHAT_DELETE = id("phone_chat_delete");
     public static final ResourceLocation CHAT_STATE_SYNC = id("phone_chat_state_sync");
+    public static final ResourceLocation CHAT_SET_NICKNAME = id("phone_chat_set_nickname");
     public static final ResourceLocation CHAT_TOAST = id("phone_chat_toast");
     public static final ResourceLocation CHAT_STATUS_TOAST = id("phone_chat_status_toast");
     public static final ResourceLocation CHAT_CONVERSATION_DELETED = id("phone_chat_conversation_deleted");
@@ -58,6 +59,8 @@ public final class PhoneNetworking {
     public static final ResourceLocation BANK_SCAN_TARGET = id("phone_bank_scan_target");
     public static final ResourceLocation BANK_SCAN_RESULT = id("phone_bank_scan_result");
     public static final ResourceLocation BANK_TRANSFER_RECEIPT = id("phone_bank_transfer_receipt");
+    public static final ResourceLocation CALL_LOG_SYNC_REQUEST = id("phone_call_log_sync_request");
+    public static final ResourceLocation CALL_LOG_SYNC = id("phone_call_log_sync");
     private static final int CHAT_STATUS_TOAST_LABEL_LENGTH = PhoneData.MAX_CONTACT_NAME_LENGTH + PhoneData.PHONE_NUMBER_LENGTH + 4;
     private static final double BANK_SCAN_MAX_DISTANCE_SQR = 12.0D * 12.0D;
     private static final Set<UUID> ACTIVE_BANK_RECEIVERS = ConcurrentHashMap.newKeySet();
@@ -162,6 +165,11 @@ public final class PhoneNetworking {
             context.queue(() -> addChatFriend((ServerPlayer) context.getPlayer(), number));
         });
 
+        NetworkManager.registerReceiver(NetworkManager.c2s(), CHAT_SET_NICKNAME, (buf, context) -> {
+            String nickname = buf.readUtf(PhoneData.MAX_CONTACT_NAME_LENGTH);
+            context.queue(() -> setOwnNickname((ServerPlayer) context.getPlayer(), nickname));
+        });
+
         NetworkManager.registerReceiver(NetworkManager.c2s(), CHAT_MESSAGE_SEND, (buf, context) -> {
             String number = buf.readUtf(PhoneData.PHONE_NUMBER_LENGTH);
             String message = buf.readUtf(PhoneChatData.MAX_MESSAGE_LENGTH);
@@ -222,12 +230,31 @@ public final class PhoneNetworking {
 
         NetworkManager.registerReceiver(NetworkManager.c2s(), BANK_RECEIVE_STATE, (buf, context) -> {
             boolean active = buf.readBoolean();
-            context.queue(() -> setBankReceiveState((ServerPlayer) context.getPlayer(), active));
+            boolean chat = buf.readableBytes() > 0 && buf.readBoolean();
+            context.queue(() -> setBankReceiveState((ServerPlayer) context.getPlayer(), active, chat));
         });
 
         NetworkManager.registerReceiver(NetworkManager.c2s(), BANK_SCAN_TARGET, (buf, context) -> {
             UUID targetId = buf.readUUID();
             context.queue(() -> scanBankPaymentTarget((ServerPlayer) context.getPlayer(), targetId));
+        });
+
+        NetworkManager.registerReceiver(NetworkManager.c2s(), CALL_LOG_SYNC_REQUEST, (buf, context) -> {
+            context.queue(() -> {
+                ServerPlayer player = (ServerPlayer) context.getPlayer();
+                List<CallLogEntry> entries = CallLogStorageManager.getEntries(player.getUUID(), 50);
+                RegistryFriendlyByteBuf responseBuf = NetworkBufferUtils.create();
+                writeHomePhoneContext(responseBuf, null);
+                responseBuf.writeInt(entries.size());
+                for (CallLogEntry entry : entries) {
+                    responseBuf.writeUtf(entry.otherNumber(), PhoneData.PHONE_NUMBER_LENGTH);
+                    responseBuf.writeUtf(entry.otherName() == null ? "" : entry.otherName(), PhoneData.MAX_CONTACT_NAME_LENGTH);
+                    responseBuf.writeUtf(entry.callType(), 16);
+                    responseBuf.writeLong(entry.timestamp());
+                    responseBuf.writeInt(entry.durationTicks());
+                }
+                NetworkManager.sendToPlayer(player, CALL_LOG_SYNC, responseBuf);
+            });
         });
 
         PlayerEvent.PLAYER_JOIN.register(player -> {
@@ -377,10 +404,10 @@ public final class PhoneNetworking {
         try {
             return ChatStorageManager.isAvailable()
                     ? ChatStorageManager.getInstance().createPayload(ownerUuid)
-                    : new PhoneChatStatePayload(List.of(), List.of());
+                    : new PhoneChatStatePayload("", List.of(), List.of());
         } catch (Throwable throwable) {
             Minedevice.LOGGER.error("Failed to load chat payload for {}", ownerUuid, throwable);
-            return new PhoneChatStatePayload(List.of(), List.of());
+            return new PhoneChatStatePayload("", List.of(), List.of());
         }
     }
 
@@ -441,17 +468,19 @@ public final class PhoneNetworking {
         NetworkManager.sendToPlayer(sender, BANK_TRANSFER_RECEIPT, buf);
     }
 
-    private static void setBankReceiveState(ServerPlayer player, boolean active) {
+    private static void setBankReceiveState(ServerPlayer player, boolean active, boolean chat) {
         if (player == null) {
             return;
         }
 
         if (active && canUseMobileBank(player)) {
             ACTIVE_BANK_RECEIVERS.add(player.getUUID());
-            PhoneCallPoseAccess.setPhoneBankQrPoseActive(player, true);
+            PhoneCallPoseAccess.setPhoneBankQrPoseActive(player, !chat);
+            PhoneCallPoseAccess.setPhoneChatQrPoseActive(player, chat);
         } else {
             ACTIVE_BANK_RECEIVERS.remove(player.getUUID());
             PhoneCallPoseAccess.setPhoneBankQrPoseActive(player, false);
+            PhoneCallPoseAccess.setPhoneChatQrPoseActive(player, false);
         }
     }
 
@@ -491,6 +520,7 @@ public final class PhoneNetworking {
 
             if (!canUseMobileBank(player)) {
                 PhoneCallPoseAccess.setPhoneBankQrPoseActive(player, false);
+                PhoneCallPoseAccess.setPhoneChatQrPoseActive(player, false);
                 return true;
             }
 
@@ -725,8 +755,11 @@ public final class PhoneNetworking {
             return;
         }
 
-        String resolvedName = target.getGameProfile().getName();
         UUID targetUuid = target.getUUID();
+        String resolvedName = ChatStorageManager.isAvailable() ? ChatStorageManager.getInstance().getOwnNickname(targetUuid) : "";
+        if (resolvedName == null || resolvedName.isEmpty()) {
+            resolvedName = target.getGameProfile().getName();
+        }
         if (PhoneChatData.addFriend(ItemStack.EMPTY, resolvedName, number, targetUuid, player)) {
             syncChatState(player);
             sendChatStatusToast(player, true, number, formatChatLabel(resolvedName, number));
@@ -788,18 +821,6 @@ public final class PhoneNetworking {
         }
 
         syncChatState(sender);
-        sender.sendSystemMessage(Component.translatable("screen.minedevice.phone.status.chat_sent"));
-        sendPhoneToast(sender,
-                Component.translatable("toast.minedevice.phone.chat.sent.title"),
-                Component.translatable("toast.minedevice.phone.chat.sent.body",
-                        Component.literal(formatChatLabel(receiverName, number)),
-                        message));
-        if (receiver != null && PhoneData.hasPhone(receiver)) {
-            receiver.sendSystemMessage(Component.translatable(
-                    "screen.minedevice.phone.chat.status.incoming_from",
-                    senderName,
-                    ownNumber));
-        }
     }
 
     private static void deleteChatConversation(ServerPlayer player, String rawNumber) {
@@ -1021,6 +1042,21 @@ public final class PhoneNetworking {
         buf.writeBoolean(uuid != null);
         if (uuid != null) {
             buf.writeUUID(uuid);
+        }
+    }
+
+    public static void setOwnNickname(ServerPlayer player, String nickname) {
+        if (player == null || nickname == null) {
+            return;
+        }
+
+        if (nickname.length() > PhoneData.MAX_CONTACT_NAME_LENGTH) {
+            nickname = nickname.substring(0, PhoneData.MAX_CONTACT_NAME_LENGTH);
+        }
+
+        if (ChatStorageManager.isAvailable()) {
+            ChatStorageManager.getInstance().setOwnNickname(player.getUUID(), nickname);
+            syncChatState(player);
         }
     }
 

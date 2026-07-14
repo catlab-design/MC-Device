@@ -14,16 +14,24 @@ import java.util.UUID;
 public final class PhoneClientChatState {
     private static final Map<String, FriendState> FRIENDS = new LinkedHashMap<>();
     private static final Map<String, ConversationState> CONVERSATIONS = new LinkedHashMap<>();
+    private static String OWN_NICKNAME = "";
 
     private PhoneClientChatState() {
+    }
+
+    public static synchronized String getOwnNickname() {
+        return OWN_NICKNAME;
     }
 
     public static synchronized void apply(PhoneChatStatePayload payload) {
         FRIENDS.clear();
         CONVERSATIONS.clear();
         if (payload == null) {
+            OWN_NICKNAME = "";
             return;
         }
+
+        OWN_NICKNAME = payload.ownNickname();
 
         for (PhoneChatStatePayload.FriendEntry friend : payload.friends()) {
             String number = PhoneData.normalizePhoneNumber(friend.number());
@@ -61,6 +69,7 @@ public final class PhoneClientChatState {
     public static synchronized void clear() {
         FRIENDS.clear();
         CONVERSATIONS.clear();
+        OWN_NICKNAME = "";
     }
 
     public static synchronized List<PhoneContact> getFriends() {

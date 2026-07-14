@@ -32,6 +32,7 @@ import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
@@ -95,6 +96,10 @@ public final class PhoneScreen extends Screen {
             "textures/gui/phone_gui/call_menu.png");
     static final ResourceLocation LIST_MENU_TEXTURE = ResourceLocation.fromNamespaceAndPath(Minedevice.MOD_ID,
             "textures/gui/phone_gui/list_menu.png");
+    static final ResourceLocation CALL_BUTTON_TEXTURE = ResourceLocation.fromNamespaceAndPath(Minedevice.MOD_ID,
+            "textures/gui/phone_gui/call_button.png");
+    static final ResourceLocation TIME_BUTTON_TEXTURE = ResourceLocation.fromNamespaceAndPath(Minedevice.MOD_ID,
+            "textures/gui/phone_gui/time_button.png");
     private static final ResourceLocation SHUTTER_BUTTON_TEXTURE = ResourceLocation.fromNamespaceAndPath(Minedevice.MOD_ID,
             "textures/gui/phone_gui/shutter_button.png");
     private static final ResourceLocation CAMFLIP_BUTTON_TEXTURE = ResourceLocation.fromNamespaceAndPath(Minedevice.MOD_ID,
@@ -171,6 +176,18 @@ public final class PhoneScreen extends Screen {
     boolean photoViewerMode;
     boolean callAppMode;
     boolean callContactsMode;
+    int recentsScrollOffset;
+    int chatScrollOffset;
+    private int lastObservedMessageCount;
+    boolean chatAddSelectorMode;
+    int chatAddSelectorScrollOffset;
+    int chatTab;
+    boolean chatAddMenuOpen;
+    String chatNicknameDraft = "";
+    boolean chatNicknameEditMode;
+    boolean chatScanActive;
+    int chatScanHoverTicks;
+    UUID chatScanHoverTargetId;
     boolean callSessionMode;
     boolean addContactMode;
     String addContactName = "";
@@ -298,6 +315,8 @@ public final class PhoneScreen extends Screen {
         addContactMode = false;
         chatAppMode = false;
         chatThreadMode = false;
+        chatAddSelectorMode = false;
+        chatAddSelectorScrollOffset = 0;
         bankAppMode = false;
         capturePending = false;
         captureFlashTicks = 0;
@@ -463,6 +482,15 @@ public final class PhoneScreen extends Screen {
                 bankSyncCooldown--;
             }
         }
+        if (chatThreadMode) {
+            int currentCount = getActiveChatMessages().size();
+            if (currentCount != lastObservedMessageCount) {
+                chatScrollOffset = 0;
+                lastObservedMessageCount = currentCount;
+            }
+        } else {
+            lastObservedMessageCount = 0;
+        }
         applyCallStateFromServer();
         if (isCallScreenLocked()
                 && (cameraMode || galleryMode || photoViewerMode || callAppMode || callContactsMode
@@ -507,6 +535,13 @@ public final class PhoneScreen extends Screen {
             tickBankScanHover();
         } else {
             resetBankScanHover();
+        }
+
+        if (chatScanActive) {
+            tickChatScanHover();
+        } else {
+            chatScanHoverTicks = 0;
+            chatScanHoverTargetId = null;
         }
     }
 
@@ -595,6 +630,21 @@ public final class PhoneScreen extends Screen {
         }
 
         if (chatAppMode && keyCode == InputConstants.KEY_ESCAPE) {
+            if (chatNicknameEditMode) {
+                chatNicknameEditMode = false;
+                rebuildWidgets();
+                return true;
+            }
+            if (chatAddSelectorMode) {
+                chatAddSelectorMode = false;
+                rebuildWidgets();
+                return true;
+            }
+            if (chatAddMenuOpen) {
+                chatAddMenuOpen = false;
+                rebuildWidgets();
+                return true;
+            }
             if (hasChatDeleteMenuOpen()) {
                 clearChatDeleteMenu();
                 return true;
@@ -652,7 +702,23 @@ public final class PhoneScreen extends Screen {
             }
         }
 
-        if (chatAppMode) {
+        if (chatAppMode && !chatAddSelectorMode) {
+            if (chatNicknameEditMode) {
+                if (keyCode == InputConstants.KEY_BACKSPACE) {
+                    if (!chatNicknameDraft.isEmpty()) {
+                        chatNicknameDraft = chatNicknameDraft.substring(0, chatNicknameDraft.length() - 1);
+                    }
+                    return true;
+                }
+                if (keyCode == InputConstants.KEY_RETURN || keyCode == InputConstants.KEY_NUMPADENTER) {
+                    PhoneNetworkingClient.requestSetNickname(chatNicknameDraft);
+                    chatNicknameEditMode = false;
+                    rebuildWidgets();
+                    return true;
+                }
+                return true;
+            }
+
             String digit = getDigitForKey(keyCode);
             if (digit != null) {
                 appendChatFriendDigit(digit);
@@ -746,7 +812,16 @@ public final class PhoneScreen extends Screen {
 
     @Override
     public boolean charTyped(char codePoint, int modifiers) {
-        if (chatAppMode) {
+        if (chatAppMode && !chatAddSelectorMode) {
+            if (chatNicknameEditMode) {
+                if (Character.isISOControl(codePoint)) {
+                    return false;
+                }
+                if (chatNicknameDraft.length() < PhoneData.MAX_CONTACT_NAME_LENGTH) {
+                    chatNicknameDraft += codePoint;
+                }
+                return true;
+            }
             if (Character.isDigit(codePoint)) {
                 appendChatFriendDigit(String.valueOf(codePoint));
                 return true;
@@ -926,6 +1001,40 @@ public final class PhoneScreen extends Screen {
         }
 
         if (chatAppMode) {
+            if (chatAddSelectorMode) {
+                if (button == 0) {
+                    UiRect contentBounds = getChatSurfaceBounds();
+                    int heroBottom = contentBounds.top + Math.max(22, Math.round(26 * scale));
+                    if (mouseY < heroBottom) {
+                        chatAddSelectorMode = false;
+                        rebuildWidgets();
+                        return true;
+                    }
+
+                    List<PlayerInfo> selectables = getChatAddSelectablePlayers();
+                    UiRect rowsBounds = getChatFriendRowsBounds();
+                    if (rowsBounds.contains(mouseX, mouseY)) {
+                        int listRowHeight = Math.max(22, Math.round(26 * scale));
+                        int rowGap = Math.max(2, Math.round(3 * scale));
+                        int listTop = rowsBounds.top + chatAddSelectorScrollOffset;
+                        for (int i = 0; i < selectables.size(); i++) {
+                            int y = listTop + i * (listRowHeight + rowGap);
+                            UiRect rowBounds = new UiRect(rowsBounds.left, y, rowsBounds.width, listRowHeight);
+                            if (rowBounds.contains(mouseX, mouseY)) {
+                                PlayerInfo clicked = selectables.get(i);
+                                String number = getPlayerPhoneNumber(clicked.getProfile().getId());
+                                addChatFriend(number);
+                                chatAddSelectorMode = false;
+                                chatFriendNumber = "";
+                                rebuildWidgets();
+                                return true;
+                            }
+                        }
+                    }
+                }
+                return true;
+            }
+
             List<PhoneContact> friends = getChatFriends();
             int friendIndex = getChatFriendIndexAt(mouseX, mouseY, friends);
 
@@ -941,6 +1050,83 @@ public final class PhoneScreen extends Screen {
             }
 
             if (button == 0) {
+                // First check tab bar clicks
+                UiRect tabBounds = getChatTabBarBounds();
+                if (tabBounds.contains(mouseX, mouseY)) {
+                    int halfWidth = tabBounds.width / 2;
+                    if (mouseX < tabBounds.left + halfWidth) {
+                        chatTab = 0;
+                    } else {
+                        chatTab = 1;
+                        chatNicknameDraft = PhoneClientChatState.getOwnNickname();
+                        chatNicknameEditMode = false;
+                    }
+                    rebuildWidgets();
+                    return true;
+                }
+
+                // Check Add Friend page clicks if open
+                if (chatAddMenuOpen) {
+                    if (getChatAddBackBtnBounds().contains(mouseX, mouseY)) {
+                        chatAddMenuOpen = false;
+                        rebuildWidgets();
+                        return true;
+                    }
+
+                    if (getChatAddConfirmBtnBounds().contains(mouseX, mouseY) && canAddChatFriend(chatFriendNumber)) {
+                        addChatFriend(chatFriendNumber);
+                        chatAddMenuOpen = false;
+                        rebuildWidgets();
+                        return true;
+                    }
+
+                    if (getChatAddOptOnlineBounds().contains(mouseX, mouseY)) {
+                        chatAddMenuOpen = false;
+                        chatAddSelectorMode = true;
+                        chatAddSelectorScrollOffset = 0;
+                        rebuildWidgets();
+                        return true;
+                    }
+
+                    if (getChatAddOptScanBounds().contains(mouseX, mouseY)) {
+                        chatAddMenuOpen = false;
+                        chatScanActive = true;
+                        cameraMode = true;
+                        rebuildWidgets();
+                        return true;
+                    }
+                    return true;
+                }
+
+                // Tab Specific checks
+                if (chatTab == 1) { // Profile Tab
+                    if (getChatAddFriendButtonBounds().contains(mouseX, mouseY)) {
+                        chatAddMenuOpen = true;
+                        rebuildWidgets();
+                        return true;
+                    }
+                    if (getChatNicknameEditBounds().contains(mouseX, mouseY)) {
+                        chatNicknameEditMode = true;
+                        chatNicknameDraft = PhoneClientChatState.getOwnNickname();
+                        rebuildWidgets();
+                        return true;
+                    }
+                    if (chatNicknameEditMode) {
+                        PhoneNetworkingClient.requestSetNickname(chatNicknameDraft);
+                        chatNicknameEditMode = false;
+                        rebuildWidgets();
+                        return true;
+                    }
+                    return true;
+                }
+
+                // Standard Chat Tab (tab 0)
+                if (getChatHeaderPlusBounds().contains(mouseX, mouseY)) {
+                    chatAddMenuOpen = true;
+                    rebuildWidgets();
+                    return true;
+                }
+
                 if (hasChatDeleteMenuOpen()) {
                     int deleteTargetIndex = getChatDeleteTargetIndex(friends);
                     if (deleteTargetIndex >= 0
@@ -949,11 +1135,6 @@ public final class PhoneScreen extends Screen {
                         clearChatDeleteMenu();
                         return true;
                     }
-                }
-
-                if (getChatAddButtonBounds().contains(mouseX, mouseY) && canAddChatFriend(chatFriendNumber)) {
-                    addChatFriend(chatFriendNumber);
-                    return true;
                 }
 
                 if (friendIndex >= 0 && friendIndex < friends.size()) {
@@ -1144,6 +1325,20 @@ public final class PhoneScreen extends Screen {
                 return true;
             }
             adjustCameraZoom(scrollY);
+            return true;
+        }
+
+        if (chatThreadMode && scrollY != 0.0D) {
+            int maxOffset = getMaxChatScrollOffset();
+            int scrollAmount = (int) Math.signum(scrollY) * 12;
+            chatScrollOffset = Mth.clamp(chatScrollOffset + scrollAmount, 0, maxOffset);
+            return true;
+        }
+
+        if (chatAppMode && chatAddSelectorMode && scrollY != 0.0D) {
+            int maxOffset = getMaxChatAddSelectorScrollOffset();
+            int scrollAmount = (int) (scrollY * 12);
+            chatAddSelectorScrollOffset = Mth.clamp(chatAddSelectorScrollOffset + scrollAmount, -maxOffset, 0);
             return true;
         }
 
@@ -1728,6 +1923,10 @@ public final class PhoneScreen extends Screen {
         return getLayoutState().callDialMenuBounds();
     }
 
+    UiRect getCallRecentsMenuBounds() {
+        return getLayoutState().callRecentsMenuBounds();
+    }
+
     UiRect getCallListMenuBounds() {
         return getLayoutState().callListMenuBounds();
     }
@@ -1882,13 +2081,114 @@ public final class PhoneScreen extends Screen {
         return new UiRect(contentBounds.right() - width - sidePadding, top, width, height);
     }
 
+    UiRect getChatHeaderPlusBounds() {
+        UiRect contentBounds = getChatSurfaceBounds();
+        int width = Math.max(14, Math.round(16 * scale));
+        int height = Math.max(14, Math.round(16 * scale));
+        int top = contentBounds.top + Math.max(5, Math.round(6 * scale));
+        int right = contentBounds.right() - Math.max(5, Math.round(6 * scale));
+        return new UiRect(right - width, top, width, height);
+    }
+
     UiRect getChatFriendRowsBounds() {
         UiRect contentBounds = getChatSurfaceBounds();
         int sidePadding = getChatSidePadding();
-        int top = getChatFriendInputBounds().bottom() + Math.max(5, Math.round(6 * scale));
-        int bottom = contentBounds.bottom() - Math.max(2, Math.round(3 * scale));
+        int top = getChatHeaderBounds().bottom() + Math.max(5, Math.round(6 * scale));
+        int tabBarHeight = Math.max(26, Math.round(32 * scale));
+        int bottom = contentBounds.bottom() - tabBarHeight;
         return new UiRect(contentBounds.left + sidePadding, top,
                 contentBounds.width - (sidePadding * 2), Math.max(24, bottom - top));
+    }
+
+    UiRect getChatTabBarBounds() {
+        UiRect contentBounds = getChatSurfaceBounds();
+        int height = Math.max(26, Math.round(32 * scale));
+        return new UiRect(contentBounds.left, contentBounds.bottom() - height, contentBounds.width, height);
+    }
+
+    UiRect getChatAddSheetBounds() {
+        UiRect contentBounds = getChatSurfaceBounds();
+        int height = Math.max(100, Math.round(110 * scale));
+        return new UiRect(contentBounds.left, contentBounds.bottom() - height, contentBounds.width, height);
+    }
+
+    UiRect getChatNicknameEditBounds() {
+        Minecraft minecraft = Minecraft.getInstance();
+        UiRect contentBounds = getChatSurfaceBounds();
+        int avatarSize = Math.max(24, Math.round(30 * scale));
+        int avatarY = contentBounds.top + Math.max(8, Math.round(10 * scale));
+        int nicknameHeight = Math.round(minecraft.font.lineHeight * 0.44F);
+        int top = avatarY + avatarSize + Math.max(4, Math.round(6 * scale)) + nicknameHeight + Math.max(4, Math.round(6 * scale));
+        int width = Math.max(80, Math.round(100 * scale));
+        int height = Math.max(14, Math.round(18 * scale));
+        int left = contentBounds.left + (contentBounds.width - width) / 2;
+        return new UiRect(left, top, width, height);
+    }
+
+    UiRect getChatProfileDetailsBounds() {
+        UiRect editBounds = getChatNicknameEditBounds();
+        UiRect contentBounds = getChatSurfaceBounds();
+        int width = contentBounds.width - Math.max(16, Math.round(20 * scale));
+        int height = Math.max(32, Math.round(38 * scale));
+        int left = contentBounds.left + (contentBounds.width - width) / 2;
+        int top = editBounds.bottom() + Math.max(6, Math.round(8 * scale));
+        return new UiRect(left, top, width, height);
+    }
+
+    UiRect getChatProfileFriendsBounds() {
+        UiRect detailsBounds = getChatProfileDetailsBounds();
+        int height = Math.max(20, Math.round(24 * scale));
+        int top = detailsBounds.bottom() + Math.max(4, Math.round(5 * scale));
+        return new UiRect(detailsBounds.left, top, detailsBounds.width, height);
+    }
+
+    UiRect getChatAddFriendButtonBounds() {
+        UiRect friendsBounds = getChatProfileFriendsBounds();
+        int width = Math.max(80, Math.round(100 * scale));
+        int height = Math.max(16, Math.round(20 * scale));
+        int left = friendsBounds.left + (friendsBounds.width - width) / 2;
+        int top = friendsBounds.bottom() + Math.max(6, Math.round(8 * scale));
+        return new UiRect(left, top, width, height);
+    }
+
+    UiRect getChatAddBackBtnBounds() {
+        UiRect contentBounds = getChatSurfaceBounds();
+        int size = Math.max(14, Math.round(18 * scale));
+        return new UiRect(contentBounds.left + Math.max(6, Math.round(8 * scale)), contentBounds.top + Math.max(5, Math.round(6 * scale)), size, size);
+    }
+
+    UiRect getChatAddInputBounds() {
+        UiRect contentBounds = getChatSurfaceBounds();
+        int width = contentBounds.width - Math.max(20, Math.round(30 * scale));
+        int height = Math.max(18, Math.round(22 * scale));
+        int left = contentBounds.left + (contentBounds.width - width) / 2;
+        int top = contentBounds.top + Math.max(45, Math.round(52 * scale));
+        return new UiRect(left, top, width, height);
+    }
+
+    UiRect getChatAddConfirmBtnBounds() {
+        UiRect inputBounds = getChatAddInputBounds();
+        int width = Math.max(70, Math.round(90 * scale));
+        int height = Math.max(18, Math.round(22 * scale));
+        int left = inputBounds.left + (inputBounds.width - width) / 2;
+        int top = inputBounds.bottom() + Math.max(5, Math.round(8 * scale));
+        return new UiRect(left, top, width, height);
+    }
+
+    UiRect getChatAddOptOnlineBounds() {
+        UiRect confirmBounds = getChatAddConfirmBtnBounds();
+        UiRect contentBounds = getChatSurfaceBounds();
+        int width = contentBounds.width - Math.max(20, Math.round(30 * scale));
+        int height = Math.max(22, Math.round(28 * scale));
+        int left = contentBounds.left + (contentBounds.width - width) / 2;
+        int top = confirmBounds.bottom() + Math.max(15, Math.round(20 * scale));
+        return new UiRect(left, top, width, height);
+    }
+
+    UiRect getChatAddOptScanBounds() {
+        UiRect onlineBounds = getChatAddOptOnlineBounds();
+        int top = onlineBounds.bottom() + Math.max(6, Math.round(10 * scale));
+        return new UiRect(onlineBounds.left, top, onlineBounds.width, onlineBounds.height);
     }
 
     UiRect getChatFriendRowBounds(int index, int friendCount) {
@@ -2175,6 +2475,93 @@ public final class PhoneScreen extends Screen {
             return List.of();
         }
         return PhoneClientChatState.getMessages(activeChatNumber);
+    }
+
+    int getMaxChatScrollOffset() {
+        List<PhoneChatMessage> messages = getActiveChatMessages();
+        if (messages.isEmpty()) {
+            return 0;
+        }
+
+        Font font = this.font;
+        UiRect messagesBounds = getChatMessagesBounds();
+        int bubblePaddingX = Math.max(4, Math.round(5 * scale));
+        int bubblePaddingY = Math.max(3, Math.round(4 * scale));
+        int bubbleGap = Math.max(4, Math.round(5 * scale));
+        int lineHeight = Math.max(7, Math.round(font.lineHeight * 0.65F));
+        int maxBubbleWidth = Math.max(38, Math.round(messagesBounds.width * 0.80F));
+        int sideInset = Math.max(1, Math.round(2 * scale));
+
+        int totalHeight = 0;
+        for (int i = 0; i < messages.size(); i++) {
+            PhoneChatMessage message = messages.get(i);
+            List<FormattedCharSequence> lines = font.split(Component.literal(message.text()),
+                    Math.max(18, maxBubbleWidth - (bubblePaddingX * 2)));
+            int bubbleHeight = (lines.size() * lineHeight) + (bubblePaddingY * 2);
+            totalHeight += bubbleHeight;
+            if (i < messages.size() - 1) {
+                totalHeight += bubbleGap;
+            }
+        }
+
+        int viewportHeight = messagesBounds.height - sideInset * 2;
+        return Math.max(0, totalHeight - viewportHeight);
+    }
+
+    int getMaxChatAddSelectorScrollOffset() {
+        List<PlayerInfo> selectables = getChatAddSelectablePlayers();
+        if (selectables.isEmpty()) {
+            return 0;
+        }
+
+        UiRect rowsBounds = getChatFriendRowsBounds();
+        int listRowHeight = Math.max(22, Math.round(26 * scale));
+        int rowGap = Math.max(2, Math.round(3 * scale));
+        int totalHeight = selectables.size() * (listRowHeight + rowGap) - rowGap;
+
+        return Math.max(0, totalHeight - rowsBounds.height);
+    }
+
+    String getPlayerPhoneNumber(UUID uuid) {
+        if (uuid == null) {
+            return "00000";
+        }
+        int hash = uuid.hashCode();
+        int number = 10000 + Math.floorMod(hash, 90000);
+        return String.format(java.util.Locale.ROOT, "%05d", number);
+    }
+
+    List<PlayerInfo> getChatAddSelectablePlayers() {
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft == null || minecraft.getConnection() == null) {
+            return List.of();
+        }
+
+        List<PlayerInfo> list = new ArrayList<>();
+        String ownNumber = getOwnPhoneNumber();
+        for (PlayerInfo info : minecraft.getConnection().getOnlinePlayers()) {
+            if (info == null || info.getProfile() == null) {
+                continue;
+            }
+
+            UUID uuid = info.getProfile().getId();
+            String numberStr = getPlayerPhoneNumber(uuid);
+
+            if (numberStr.equals(ownNumber)) {
+                continue;
+            }
+
+            if (PhoneClientChatState.hasFriend(numberStr)) {
+                continue;
+            }
+
+            list.add(info);
+        }
+        return list;
+    }
+
+    ResourceLocation getPlayerSkin(PlayerInfo info) {
+        return info != null ? info.getSkin().texture() : DefaultPlayerSkin.getDefaultTexture();
     }
 
     String getActiveChatDisplayName() {
@@ -2522,6 +2909,13 @@ public final class PhoneScreen extends Screen {
         callSessionMode = false;
         chatAppMode = true;
         chatThreadMode = false;
+        chatAddSelectorMode = false;
+        chatAddSelectorScrollOffset = 0;
+        chatTab = 0;
+        chatAddMenuOpen = false;
+        chatNicknameEditMode = false;
+        chatScanActive = false;
+        chatScanHoverTicks = 0;
         bankAppMode = false;
         clearChatDeleteMenu();
         if (!activeChatNumber.isEmpty() && activeChatName.isBlank()) {
@@ -2537,6 +2931,11 @@ public final class PhoneScreen extends Screen {
         chatDraft = "";
         activeChatNumber = "";
         activeChatName = "";
+        chatTab = 0;
+        chatAddMenuOpen = false;
+        chatNicknameEditMode = false;
+        chatScanActive = false;
+        chatScanHoverTicks = 0;
         clearChatDeleteMenu();
         unlocked = true;
         rebuildWidgets();
@@ -2711,6 +3110,8 @@ public final class PhoneScreen extends Screen {
         clearChatDeleteMenu();
         chatAppMode = false;
         chatThreadMode = true;
+        chatScrollOffset = 0;
+        lastObservedMessageCount = 0;
         rebuildWidgets();
     }
 
@@ -3185,6 +3586,34 @@ public final class PhoneScreen extends Screen {
     private void resetBankScanHover() {
         bankScanHoverTargetId = null;
         bankScanHoverTicks = 0;
+    }
+
+    private void tickChatScanHover() {
+        Player targetPlayer = getBankScanTargetPlayer();
+        if (targetPlayer == null) {
+            chatScanHoverTargetId = null;
+            chatScanHoverTicks = 0;
+            return;
+        }
+
+        UUID targetId = targetPlayer.getUUID();
+        if (!targetId.equals(chatScanHoverTargetId)) {
+            chatScanHoverTargetId = targetId;
+            chatScanHoverTicks = 1;
+            return;
+        }
+
+        if (chatScanHoverTicks < 15) {
+            chatScanHoverTicks++;
+            return;
+        }
+
+        String friendNum = getPlayerPhoneNumber(targetId);
+        addChatFriend(friendNum);
+        chatScanActive = false;
+        cameraMode = false;
+        chatTab = 0;
+        rebuildWidgets();
     }
 
     private void tryScanBankPaymentTarget() {

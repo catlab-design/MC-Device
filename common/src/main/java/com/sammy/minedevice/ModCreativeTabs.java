@@ -40,8 +40,10 @@ public final class ModCreativeTabs {
         CreativeTabRegistry.append(MAIN, ModItems.BILL100);
         CreativeTabRegistry.append(MAIN, ModItems.BILL500);
         CreativeTabRegistry.append(MAIN, ModItems.BILL1000);
+        CreativeTabRegistry.append(MAIN, ModItems.COIN);
         CreativeTabRegistry.append(MAIN, ModItems.CARD);
         CreativeTabRegistry.append(MAIN, ModItems.ATM);
+        CreativeTabRegistry.append(MAIN, ModItems.LABTOP);
     }
 
     private static ItemStack dyedMegaphone(DyeColor color) {

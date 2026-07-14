@@ -1,11 +1,13 @@
 package com.sammy.minedevice.client.phone;
 
+import com.sammy.minedevice.phone.CallLogEntry;
 import com.sammy.minedevice.phone.PhoneCallState;
 import com.sammy.minedevice.phone.PhoneData;
 import net.minecraft.core.BlockPos;
 
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -158,6 +160,22 @@ public final class PhoneClientCallState {
             return mobileState;
         }
         return homePhoneStates.getOrDefault(blockPos, CallSnapshot.idle());
+    }
+
+    private static List<CallLogEntry> callLogEntries = List.of();
+    private static long callLogRevision;
+
+    public static void setCallLogEntries(List<CallLogEntry> entries) {
+        callLogEntries = entries == null ? List.of() : List.copyOf(entries);
+        callLogRevision++;
+    }
+
+    public static List<CallLogEntry> getCallLogEntries() {
+        return callLogEntries;
+    }
+
+    public static long getCallLogRevision() {
+        return callLogRevision;
     }
 
     private static int connectedDurationTicks(CallSnapshot snapshot) {

@@ -2,6 +2,7 @@ package com.sammy.minedevice.client;
 
 import com.mojang.blaze3d.platform.InputConstants;
 import com.sammy.minedevice.Minedevice;
+import com.sammy.minedevice.ModBlockEntities;
 import com.sammy.minedevice.ModBlocks;
 import com.sammy.minedevice.ModItems;
 import com.sammy.minedevice.block.HomePhoneBlock;
@@ -12,6 +13,7 @@ import com.sammy.minedevice.client.atm.AtmNetworkingClient;
 import com.sammy.minedevice.client.phone.PhoneClientHooks;
 import com.sammy.minedevice.client.phone.PhoneClientCallState;
 import com.sammy.minedevice.client.phone.PhoneNetworkingClient;
+import com.sammy.minedevice.client.render.LabtopBlockEntityRenderer;
 import com.sammy.minedevice.client.walkie.WalkieNetworkingClient;
 import com.sammy.minedevice.item.HomePhoneHandsetItem;
 import com.sammy.minedevice.item.MegaphoneItem;
@@ -21,6 +23,7 @@ import dev.architectury.event.events.client.ClientLifecycleEvent;
 import dev.architectury.event.events.client.ClientPlayerEvent;
 import dev.architectury.event.events.client.ClientTickEvent;
 import dev.architectury.platform.Platform;
+import dev.architectury.registry.client.rendering.BlockEntityRendererRegistry;
 import dev.architectury.registry.item.ItemPropertiesRegistry;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.KeyMapping;
@@ -60,6 +63,7 @@ public final class MinedeviceClient {
 
         initialized = true;
         registerModelProperties();
+        BlockEntityRendererRegistry.register(ModBlockEntities.LABTOP.get(), LabtopBlockEntityRenderer::new);
         AirstrikeClientConfig.init();
         AirstrikeNetworkingClient.init();
         AtmNetworkingClient.init();
@@ -413,6 +417,7 @@ public final class MinedeviceClient {
         ResourceLocation phoneCallPoseProperty = ResourceLocation.fromNamespaceAndPath(Minedevice.MOD_ID, "call_pose");
         ResourceLocation phoneOnProperty = ResourceLocation.fromNamespaceAndPath(Minedevice.MOD_ID, "screen_on");
         ResourceLocation phoneQrProperty = ResourceLocation.fromNamespaceAndPath(Minedevice.MOD_ID, "bank_qr");
+        ResourceLocation phoneChatQrProperty = ResourceLocation.fromNamespaceAndPath(Minedevice.MOD_ID, "chat_qr");
         ResourceLocation megaphoneTootingProperty = ResourceLocation.fromNamespaceAndPath(Minedevice.MOD_ID, "tooting");
         ResourceLocation stackedProperty = ResourceLocation.fromNamespaceAndPath(Minedevice.MOD_ID, "stacked");
         ItemPropertiesRegistry.register(ModItems.PHONE.get(), phoneCallPoseProperty,
@@ -425,6 +430,10 @@ public final class MinedeviceClient {
                         : 0.0F);
         ItemPropertiesRegistry.register(ModItems.PHONE.get(), phoneQrProperty,
                 (stack, level, entity, seed) -> entity != null && PhoneClientHooks.shouldUsePhoneQrModel(entity)
+                        ? 1.0F
+                        : 0.0F);
+        ItemPropertiesRegistry.register(ModItems.PHONE.get(), phoneChatQrProperty,
+                (stack, level, entity, seed) -> entity != null && PhoneClientHooks.shouldUseChatQrModel(entity)
                         ? 1.0F
                         : 0.0F);
         ItemPropertiesRegistry.register(ModItems.MEGAPHONE.get(), megaphoneTootingProperty,
