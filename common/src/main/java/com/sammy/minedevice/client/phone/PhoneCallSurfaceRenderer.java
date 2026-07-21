@@ -159,43 +159,76 @@ final class PhoneCallSurfaceRenderer {
             PhoneScreenDraw.drawScaledText(guiGraphics, minecraft.font, emptyText, emptyX, emptyY, 0xFF000000, false, emptyScale);
             PhoneScreenDraw.drawScaledText(guiGraphics, minecraft.font, hintText, hintX, hintY, 0xFF636366, false, hintScale);
         } else {
-            for (int index = 0; index < contacts.size(); index++) {
+            UiRect rowsBounds = screen.getContactRowsBounds();
+            int scrollOffset = screen.contactsScrollOffset;
+            int contactRowHeight = screen.getContactsRowHeight();
+            int rowGap = screen.getContactsRowGap();
+            int itemHeight = contactRowHeight + rowGap;
+            int visibleRows = screen.getContactsListVisibleRows();
+
+            guiGraphics.enableScissor(rowsBounds.left, rowsBounds.top, rowsBounds.right(), rowsBounds.bottom());
+
+            int end = Math.min(contacts.size(), scrollOffset + visibleRows);
+            for (int index = scrollOffset; index < end; index++) {
                 PhoneContact contact = contacts.get(index);
-                UiRect rowBounds = screen.getContactRowBounds(index, contacts.size());
-                UiRect deleteBounds = screen.getContactDeleteButtonBounds(index, contacts.size());
-                UiRect editBounds = screen.getContactEditButtonBounds(index, contacts.size());
-                guiGraphics.fill(rowBounds.left, rowBounds.top, rowBounds.right(), rowBounds.bottom(), 0xFFEAEBEE);
-                guiGraphics.fill(rowBounds.left + 1, rowBounds.top + 1, rowBounds.right() - 1, rowBounds.bottom() - 1, 0xFFEAEBEE);
+                int y = rowsBounds.top + (index - scrollOffset) * itemHeight;
+
+                int rowLeft = rowsBounds.left;
+                int rowWidth = rowsBounds.width;
+
+                guiGraphics.fill(rowLeft, y, rowLeft + rowWidth, y + contactRowHeight, 0xFFEAEBEE);
+                guiGraphics.fill(rowLeft + 1, y + 1, rowLeft + rowWidth - 1, y + contactRowHeight - 1, 0xFFEAEBEE);
 
                 Component nameText = Component.literal(contact.displayName());
                 Component numberText = Component.literal(contact.number());
                 Component lineText = contact.displayName().equals(contact.number())
                         ? numberText : nameText;
-                int textLeft = rowBounds.left + Math.max(5, Math.round(6 * screen.scale));
-                int textRight = editBounds.left - Math.max(4, Math.round(6 * screen.scale));
+
+                int btnSize = Math.min(contactRowHeight - Math.max(4, Math.round(6 * screen.scale)), Math.max(12, Math.round(15 * screen.scale)));
+                int btnPadding = Math.max(3, Math.round(4 * screen.scale));
+                int btnX = rowLeft + rowWidth - btnSize - btnPadding;
+                int btnY = y + (contactRowHeight - btnSize) / 2;
+
+                int editGap = Math.max(2, Math.round(2 * screen.scale));
+                int editX = btnX - btnSize - editGap;
+
+                int textLeft = rowLeft + Math.max(5, Math.round(6 * screen.scale));
+                int textRight = editX - Math.max(4, Math.round(6 * screen.scale));
                 int textMaxWidth = Math.max(18, textRight - textLeft);
                 boolean showNumberOnly = contact.displayName().equals(contact.number());
                 float lineScale = PhoneScreenDraw.textScaleToFit(minecraft.font, lineText, textMaxWidth, showNumberOnly ? 0.35F : 0.40F);
                 int lineHeight = PhoneScreenDraw.scaledTextHeight(minecraft.font, lineScale);
                 PhoneScreenDraw.drawScaledText(guiGraphics, minecraft.font, lineText, textLeft,
-                        rowBounds.top + (rowBounds.height - lineHeight) / 2,
+                        y + (contactRowHeight - lineHeight) / 2,
                         showNumberOnly ? 0xFF8E8E93 : 0xFF000000, false, lineScale);
 
-                guiGraphics.blit(PhoneScreen.DELETE_BUTTON_TEXTURE, deleteBounds.left, deleteBounds.top,
-                        deleteBounds.width, deleteBounds.height, 0.0F, 0.0F, 24, 24, 24, 24);
+                guiGraphics.blit(PhoneScreen.DELETE_BUTTON_TEXTURE, btnX, btnY,
+                        btnSize, btnSize, 0.0F, 0.0F, 24, 24, 24, 24);
 
-                guiGraphics.fill(editBounds.left, editBounds.top, editBounds.right(), editBounds.bottom(), 0xFF007AFF);
-                guiGraphics.fill(editBounds.left + 1, editBounds.top + 1, editBounds.right() - 1, editBounds.bottom() - 1, 0xFF007AFF);
+                guiGraphics.fill(editX, btnY, editX + btnSize, btnY + btnSize, 0xFF007AFF);
+                guiGraphics.fill(editX + 1, btnY + 1, editX + btnSize - 1, btnY + btnSize - 1, 0xFF007AFF);
                 Component editIcon = Component.literal("✎");
                 float editScale = PhoneScreenDraw.textScaleToFit(minecraft.font, editIcon,
-                        editBounds.width - Math.max(2, Math.round(3 * screen.scale)), 0.40F);
+                        btnSize - Math.max(2, Math.round(3 * screen.scale)), 0.40F);
                 int editIconWidth = PhoneScreenDraw.scaledTextWidth(minecraft.font, editIcon, editScale);
                 int editIconHeight = PhoneScreenDraw.scaledTextHeight(minecraft.font, editScale);
                 PhoneScreenDraw.drawScaledText(guiGraphics, minecraft.font, editIcon,
-                        editBounds.left + (editBounds.width - editIconWidth) / 2,
-                        editBounds.top + (editBounds.height - editIconHeight) / 2,
+                        editX + (btnSize - editIconWidth) / 2,
+                        btnY + (btnSize - editIconHeight) / 2,
                         0xFFFFFFFF, false, editScale);
             }
+
+            if (contacts.size() > visibleRows) {
+                int scrollBarLeft = rowsBounds.right() - Math.max(2, Math.round(3 * screen.scale));
+                int scrollBarWidth = Math.max(2, Math.round(3 * screen.scale));
+                int scrollBarHeight = rowsBounds.height;
+                int thumbHeight = Math.max(8, scrollBarHeight * visibleRows / contacts.size());
+                int thumbTop = rowsBounds.top + (scrollBarHeight - thumbHeight) * scrollOffset / Math.max(1, contacts.size() - visibleRows);
+                guiGraphics.fill(scrollBarLeft, rowsBounds.top, scrollBarLeft + scrollBarWidth, rowsBounds.bottom(), 0x20AAAAAA);
+                guiGraphics.fill(scrollBarLeft, thumbTop, scrollBarLeft + scrollBarWidth, thumbTop + thumbHeight, 0x60AAAAAA);
+            }
+
+            guiGraphics.disableScissor();
         }
 
         renderCallMenuTabs(screen, guiGraphics, false, true, false);

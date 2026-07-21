@@ -134,11 +134,13 @@ final class PhoneChatSurfaceRenderer {
             UiRect rowsBounds = screen.getChatFriendRowsBounds();
             guiGraphics.enableScissor(rowsBounds.left, rowsBounds.top, rowsBounds.right(), rowsBounds.bottom());
 
-            for (int index = 0; index < friends.size(); index++) {
+            int scrollOffset = screen.chatFriendsScrollOffset;
+            int visibleRows = screen.getChatFriendsVisibleRows();
+            int end = Math.min(friends.size(), scrollOffset + visibleRows);
+            for (int index = scrollOffset; index < end; index++) {
                 PhoneContact friend = friends.get(index);
                 UiRect rowBounds = screen.getChatFriendRowBounds(index, friends.size());
                 if (rowBounds.bottom() < rowsBounds.top) continue;
-                if (rowBounds.top > rowsBounds.bottom()) break;
 
                 boolean showDeleteButton = screen.isChatDeleteMenuOpenFor(friend.number());
                 renderElevatedRoundedPanel(guiGraphics, rowBounds.left, rowBounds.top, rowBounds.width, rowBounds.height, CARD_BORDER, CARD_FILL, SHADOW_SOFT);
@@ -180,6 +182,16 @@ final class PhoneChatSurfaceRenderer {
                         previewMessage.text());
                 drawFittedText(guiGraphics, font, previewText, textLeft, previewY, textWidth,
                         previewMessage == null ? TEXT_FAINT : TEXT_MUTED, 0.26F, 0.66F);
+            }
+
+            if (friends.size() > visibleRows) {
+                int scrollBarLeft = rowsBounds.right() - Math.max(2, Math.round(3 * screen.scale));
+                int scrollBarWidth = Math.max(2, Math.round(3 * screen.scale));
+                int scrollBarHeight = rowsBounds.height;
+                int thumbHeight = Math.max(8, scrollBarHeight * visibleRows / friends.size());
+                int thumbTop = rowsBounds.top + (scrollBarHeight - thumbHeight) * scrollOffset / Math.max(1, friends.size() - visibleRows);
+                guiGraphics.fill(scrollBarLeft, rowsBounds.top, scrollBarLeft + scrollBarWidth, rowsBounds.bottom(), 0x20AAAAAA);
+                guiGraphics.fill(scrollBarLeft, thumbTop, scrollBarLeft + scrollBarWidth, thumbTop + thumbHeight, 0x60AAAAAA);
             }
 
             guiGraphics.disableScissor();

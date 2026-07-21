@@ -331,6 +331,22 @@ public final class AtmNetworking {
         markInventoryChanged(player);
     }
 
+    public static void openScreenCardless(ServerPlayer player, BlockPos atmPos) {
+        BlockPos basePos = resolveAccessibleAtm(player, atmPos);
+        if (basePos == null) {
+            return;
+        }
+
+        player.openMenu(new net.minecraft.world.SimpleMenuProvider(
+                (id, inv, p) -> {
+                    AtmMenu menu = new AtmMenu(id, inv, basePos);
+                    menu.setCardlessMode(true);
+                    return menu;
+                },
+                Component.translatable("screen.minedevice.atm.title")
+        ));
+    }
+
     public static void openBankScreen(ServerPlayer player) {
         FriendlyByteBuf buf = new FriendlyByteBuf(Unpooled.buffer());
         NetworkManager.sendToPlayer(player, BANK_OPEN_SCREEN, buf);

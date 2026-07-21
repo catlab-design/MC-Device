@@ -3,6 +3,7 @@ package com.sammy.minedevice.command;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.LongArgumentType;
 import com.sammy.minedevice.atm.AtmAccountStore;
+import com.sammy.minedevice.atm.AtmConfigStore;
 import dev.architectury.event.events.common.CommandRegistrationEvent;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -48,7 +49,13 @@ public final class MinedeviceCommands {
                                         .then(Commands.argument("amount", LongArgumentType.longArg(1))
                                                 .executes(ctx -> addMoney(ctx.getSource(),
                                                         EntityArgument.getPlayer(ctx, "player"),
-                                                        LongArgumentType.getLong(ctx, "amount"))))))));
+                                                        LongArgumentType.getLong(ctx, "amount")))))))
+                .then(Commands.literal("atm")
+                        .then(Commands.literal("require-card")
+                                .then(Commands.literal("true")
+                                        .executes(ctx -> setRequireCard(ctx.getSource(), true)))
+                                .then(Commands.literal("false")
+                                        .executes(ctx -> setRequireCard(ctx.getSource(), false))))));
     }
 
     private static AtmAccountStore store(CommandSourceStack source) {
@@ -76,5 +83,14 @@ public final class MinedeviceCommands {
                 "Added " + amount + " to " + target.getGameProfile().getName()
                         + " (now " + balance + ")"), true);
         return (int) Math.min(Integer.MAX_VALUE, balance);
+    }
+
+    private static int setRequireCard(CommandSourceStack source, boolean required) {
+        MinecraftServer server = source.getServer();
+        AtmConfigStore config = AtmConfigStore.get(server);
+        config.setCardRequired(required);
+        source.sendSuccess(() -> Component.literal(
+                "ATM card requirement set to " + required), true);
+        return 1;
     }
 }

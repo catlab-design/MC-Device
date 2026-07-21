@@ -28,7 +28,6 @@ public final class PhoneData {
     public static final int MOBILE_PHONE_MIN_NUMBER = 10000;
     private static final int HOME_PHONE_NUMBER_SPACE = HOME_PHONE_MAX_NUMBER + 1;
     private static final int MOBILE_PHONE_NUMBER_SPACE = 100000 - MOBILE_PHONE_MIN_NUMBER;
-    public static final int MAX_CONTACTS = 6;
     public static final int MAX_CONTACT_NAME_LENGTH = 24;
 
     private PhoneData() {
@@ -187,10 +186,6 @@ public final class PhoneData {
         contactTag.putString(CONTACT_NAME_TAG, sanitizeContactName(desiredName, normalized));
         contactTag.putString(CONTACT_NUMBER_TAG, normalized);
         contactsTag.add(contactTag);
-
-        while (contactsTag.size() > MAX_CONTACTS) {
-            contactsTag.remove(0);
-        }
 
         tag.put(CONTACTS_TAG, contactsTag);
         return true;

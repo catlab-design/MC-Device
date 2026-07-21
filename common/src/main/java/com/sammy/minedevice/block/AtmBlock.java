@@ -1,12 +1,15 @@
 package com.sammy.minedevice.block;
 
 import com.sammy.minedevice.ModItems;
+import com.sammy.minedevice.atm.AtmConfigStore;
 import com.sammy.minedevice.atm.AtmNetworking;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LevelAccessor;
@@ -74,13 +77,26 @@ public final class AtmBlock extends HorizontalDirectionalBlock {
             return InteractionResult.PASS;
         }
 
-        if (!player.getItemInHand(hand).is(ModItems.CARD.get())) {
-            return InteractionResult.PASS;
+        ItemStack held = player.getItemInHand(hand);
+        boolean hasCard = held.is(ModItems.CARD.get());
+
+        if (!hasCard) {
+            if (level.isClientSide()) {
+                return InteractionResult.PASS;
+            }
+            AtmConfigStore config = AtmConfigStore.get(((net.minecraft.server.level.ServerLevel) level).getServer());
+            if (config.isCardRequired()) {
+                return InteractionResult.PASS;
+            }
         }
 
         if (!level.isClientSide() && player instanceof ServerPlayer serverPlayer) {
             BlockPos basePos = state.getValue(PART) == 0 ? pos : pos.below();
-            AtmNetworking.openScreen(serverPlayer, basePos);
+            if (hasCard) {
+                AtmNetworking.openScreen(serverPlayer, basePos);
+            } else {
+                AtmNetworking.openScreenCardless(serverPlayer, basePos);
+            }
         }
 
         return InteractionResult.sidedSuccess(level.isClientSide());

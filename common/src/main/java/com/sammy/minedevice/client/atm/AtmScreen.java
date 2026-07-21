@@ -136,8 +136,10 @@ public final class AtmScreen extends AbstractContainerScreen<AtmMenu> {
             lastCardState = state;
 
             if (oldState == AtmMenu.STATE_NO_CARD && state != AtmMenu.STATE_NO_CARD) {
-                hasInsertedCard = true;
-                startCardInsert();
+                if (!menu.isCardlessMode()) {
+                    hasInsertedCard = true;
+                    startCardInsert();
+                }
             }
 
             onCardStateChanged(state);
@@ -1087,7 +1089,7 @@ public final class AtmScreen extends AbstractContainerScreen<AtmMenu> {
 
     @Override
     public void onClose() {
-        if (menu.getCardState() != AtmMenu.STATE_NO_CARD && currentPage != Page.EJECT && currentPage != Page.WELCOME) {
+        if (!menu.isCardlessMode() && menu.getCardState() != AtmMenu.STATE_NO_CARD && currentPage != Page.EJECT && currentPage != Page.WELCOME) {
             onEjectPressed();
         } else {
             super.onClose();

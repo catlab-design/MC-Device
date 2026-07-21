@@ -198,7 +198,9 @@ public final class PhoneScreen extends Screen {
     boolean callContactsMode;
     boolean callRecentsMode;
     int recentsScrollOffset;
+    int contactsScrollOffset;
     int chatScrollOffset;
+    int chatFriendsScrollOffset;
     private int lastObservedMessageCount;
     boolean chatAddSelectorMode;
     int chatAddSelectorScrollOffset;
@@ -489,6 +491,7 @@ public final class PhoneScreen extends Screen {
     protected void rebuildWidgets() {
         updateLayout();
         clearWidgets();
+        setFocused(null);
         if (photoViewerMode) {
             addPhotoViewerWidgets();
         } else if (callSessionMode) {
@@ -1065,8 +1068,8 @@ public final class PhoneScreen extends Screen {
                 return true;
             }
             if (Character.isDigit(codePoint)) {
-                appendChatFriendDigit(String.valueOf(codePoint));
-                return true;
+                // handled by keyPressed
+                return false;
             }
             return false;
         }
@@ -1287,12 +1290,20 @@ public final class PhoneScreen extends Screen {
             }
 
             List<PhoneContact> contacts = getPhoneContacts();
-            int contactIndex = getContactIndexAt(mouseX, mouseY, contacts);
+            int contactIndex = getContactsListIndexAt(mouseX, mouseY);
             if (contactIndex >= 0 && contactIndex < contacts.size()) {
                 PhoneContact contact = contacts.get(contactIndex);
-                if (getContactDeleteButtonBounds(contactIndex, contacts.size()).contains(mouseX, mouseY)) {
+                UiRect rowBounds = getContactRowBoundsWithScroll(contactIndex);
+                int btnSize = Math.min(rowBounds.height - Math.max(4, Math.round(6 * scale)), Math.max(12, Math.round(15 * scale)));
+                int btnPadding = Math.max(3, Math.round(4 * scale));
+                int btnX = rowBounds.right() - btnSize - btnPadding;
+                int btnY = rowBounds.top + (rowBounds.height - btnSize) / 2;
+                UiRect deleteBounds = new UiRect(btnX, btnY, btnSize, btnSize);
+                int editGap = Math.max(2, Math.round(2 * scale));
+                UiRect editBounds = new UiRect(deleteBounds.left - deleteBounds.width - editGap, deleteBounds.top, deleteBounds.width, deleteBounds.height);
+                if (deleteBounds.contains(mouseX, mouseY)) {
                     requestDeleteContact(contact.number());
-                } else if (getContactEditButtonBounds(contactIndex, contacts.size()).contains(mouseX, mouseY)) {
+                } else if (editBounds.contains(mouseX, mouseY)) {
                     openEditContactPage(contact);
                 } else {
                     startCallSession(contact.number());
@@ -1734,6 +1745,11 @@ public final class PhoneScreen extends Screen {
             recentsScrollOffset = Mth.clamp(recentsScrollOffset - (int) Math.signum(scrollDelta), 0, maxOffset);
             return true;
         }
+        if (callContactsMode && scrollDelta != 0.0D) {
+            int maxOffset = Math.max(0, getPhoneContacts().size() - getContactsListVisibleRows());
+            contactsScrollOffset = Mth.clamp(contactsScrollOffset - (int) Math.signum(scrollDelta), 0, maxOffset);
+            return true;
+        }
 
         if (chatThreadMode && scrollDelta != 0.0D) {
             int maxOffset = getMaxChatScrollOffset();
@@ -1746,6 +1762,12 @@ public final class PhoneScreen extends Screen {
             int maxOffset = getMaxChatAddSelectorScrollOffset();
             int scrollAmount = (int) (scrollDelta * 12);
             chatAddSelectorScrollOffset = Mth.clamp(chatAddSelectorScrollOffset + scrollAmount, -maxOffset, 0);
+            return true;
+        }
+        if (chatAppMode && !chatAddSelectorMode && !chatThreadMode && scrollDelta != 0.0D) {
+            List<PhoneContact> friends = getChatFriends();
+            int maxOffset = Math.max(0, friends.size() - getChatFriendsVisibleRows());
+            chatFriendsScrollOffset = Mth.clamp(chatFriendsScrollOffset - (int) Math.signum(scrollDelta), 0, maxOffset);
             return true;
         }
 
@@ -1860,7 +1882,7 @@ public final class PhoneScreen extends Screen {
                     return;
                 }
 
-                Font font = minecraft.font;
+                Font font = PhoneScreen.this.font;
                 int labelWidth = Math.max(this.width + Math.round(18 * scale), Math.round(46 * scale));
                 float labelScale = Math.min(0.46F, (float) labelWidth / Math.max(1, font.width(label)));
                 int labelTextWidth = PhoneScreenDraw.scaledTextWidth(font, label, labelScale);
@@ -2238,12 +2260,12 @@ public final class PhoneScreen extends Screen {
             if (!timeString.isEmpty()) {
                 Component timeText = Component.literal(timeString);
                 float timeScale = Math.max(1.55F, scale * 1.95F);
-                int textWidth = PhoneScreenDraw.scaledTextWidth(minecraft.font, timeText, timeScale);
-                int textHeight = PhoneScreenDraw.scaledTextHeight(minecraft.font, timeScale);
+                int textWidth = PhoneScreenDraw.scaledTextWidth(font, timeText, timeScale);
+                int textHeight = PhoneScreenDraw.scaledTextHeight(font, timeScale);
                 int textX = displayX + (displayWidth - textWidth) / 2;
                 int textY = displayY + Math.round(displayHeight * 0.24F) - (textHeight / 2);
 
-                PhoneScreenDraw.drawScaledText(guiGraphics, minecraft.font, timeText, textX, textY,
+                PhoneScreenDraw.drawScaledText(guiGraphics, font, timeText, textX, textY,
                         getLockAccentColor(), false, timeScale);
             }
         }
@@ -2466,6 +2488,37 @@ public final class PhoneScreen extends Screen {
         return Math.max(1, (getRecentsListBottom() - getRecentsListTop()) / getRecentsRowHeight());
     }
 
+    // ── Contacts list geometry ──
+    int getContactsRowHeight() {
+        return Math.max(16, Math.round(18 * scale));
+    }
+
+    int getContactsRowGap() {
+        return Math.max(3, Math.round(4 * scale));
+    }
+
+    int getContactsListVisibleRows() {
+        String saveCandidateNumber = getContactSaveCandidateNumber();
+        boolean canSaveNumber = !saveCandidateNumber.isEmpty() && !hasSavedContact(saveCandidateNumber);
+        UiRect rowsBounds = getLayoutState().contactRowsBounds(canSaveNumber);
+        int itemHeight = getContactsRowHeight() + getContactsRowGap();
+        return Math.max(1, rowsBounds.height / itemHeight);
+    }
+
+    // ── Chat friends list geometry ──
+    int getChatFriendsRowHeight() {
+        return Math.max(20, Math.round(30 * scale));
+    }
+
+    int getChatFriendsRowGap() {
+        return Math.max(2, Math.round(3 * scale));
+    }
+
+    int getChatFriendsVisibleRows() {
+        int itemHeight = getChatFriendsRowHeight() + getChatFriendsRowGap();
+        return Math.max(1, getChatFriendRowsBounds().height / itemHeight);
+    }
+
     UiRect getCallBackdropBounds() {
         return getLayoutState().callBackdropBounds();
     }
@@ -2544,7 +2597,7 @@ public final class PhoneScreen extends Screen {
         return getLayoutState().contactSaveButtonBounds();
     }
 
-    private UiRect getContactRowsBounds() {
+    UiRect getContactRowsBounds() {
         String saveCandidateNumber = getContactSaveCandidateNumber();
         boolean canSaveNumber = !saveCandidateNumber.isEmpty() && !hasSavedContact(saveCandidateNumber);
         return getLayoutState().contactRowsBounds(canSaveNumber);
@@ -2630,6 +2683,36 @@ public final class PhoneScreen extends Screen {
         return -1;
     }
 
+    private int getContactsListIndexAt(double mouseX, double mouseY) {
+        String saveCandidateNumber = getContactSaveCandidateNumber();
+        boolean canSaveNumber = !saveCandidateNumber.isEmpty() && !hasSavedContact(saveCandidateNumber);
+        UiRect rowsBounds = getLayoutState().contactRowsBounds(canSaveNumber);
+        int rowHeight = getContactsRowHeight();
+        int rowGap = getContactsRowGap();
+        int itemHeight = rowHeight + rowGap;
+        int visibleRows = getContactsListVisibleRows();
+        List<PhoneContact> contacts = getPhoneContacts();
+        int end = Math.min(contacts.size(), contactsScrollOffset + visibleRows + 1);
+        for (int i = contactsScrollOffset; i < end; i++) {
+            int y = rowsBounds.top + (i - contactsScrollOffset) * itemHeight;
+            UiRect rowBounds = new UiRect(rowsBounds.left, y, rowsBounds.width, rowHeight);
+            if (rowBounds.contains(mouseX, mouseY)) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    private UiRect getContactRowBoundsWithScroll(int index) {
+        String saveCandidateNumber = getContactSaveCandidateNumber();
+        boolean canSaveNumber = !saveCandidateNumber.isEmpty() && !hasSavedContact(saveCandidateNumber);
+        UiRect rowsBounds = getLayoutState().contactRowsBounds(canSaveNumber);
+        int rowHeight = getContactsRowHeight();
+        int rowGap = getContactsRowGap();
+        int y = rowsBounds.top + (index - contactsScrollOffset) * (rowHeight + rowGap);
+        return new UiRect(rowsBounds.left, y, rowsBounds.width, rowHeight);
+    }
+
     UiRect getCallMuteButtonBounds() {
         return getLayoutState().callMuteButtonBounds();
     }
@@ -2695,7 +2778,7 @@ public final class PhoneScreen extends Screen {
         UiRect contentBounds = getChatSurfaceBounds();
         int avatarSize = Math.max(24, Math.round(30 * scale));
         int avatarY = contentBounds.top + Math.max(8, Math.round(10 * scale));
-        int nicknameHeight = Math.max(9, Math.round(minecraft.font.lineHeight * 0.9F));
+        int nicknameHeight = Math.max(9, Math.round(font.lineHeight * 0.9F));
         int top = avatarY + avatarSize + Math.max(4, Math.round(6 * scale)) + nicknameHeight + Math.max(4, Math.round(6 * scale));
         int width = Math.max(80, Math.round(100 * scale));
         int height = Math.max(14, Math.round(18 * scale));
@@ -2792,12 +2875,9 @@ public final class PhoneScreen extends Screen {
 
     UiRect getChatFriendRowBounds(int index, int friendCount) {
         UiRect rowsBounds = getChatFriendRowsBounds();
-        int rowGap = Math.max(2, Math.round(3 * scale));
-        int safeCount = Math.max(1, friendCount);
-        int availableHeight = rowsBounds.height - (rowGap * (safeCount - 1));
-        int preferredRowHeight = Math.max(22, Math.round(30 * scale));
-        int rowHeight = Math.max(20, Math.min(preferredRowHeight, Math.max(20, availableHeight / safeCount)));
-        int top = rowsBounds.top + index * (rowHeight + rowGap);
+        int rowHeight = getChatFriendsRowHeight();
+        int rowGap = getChatFriendsRowGap();
+        int top = rowsBounds.top + (index - chatFriendsScrollOffset) * (rowHeight + rowGap);
         return new UiRect(rowsBounds.left, top, rowsBounds.width, rowHeight);
     }
 
@@ -3288,7 +3368,7 @@ public final class PhoneScreen extends Screen {
         // apply the same sensitivity curve the game uses for a normal turn.
         double sensitivity = minecraft.options.sensitivity().get();
         double base = sensitivity * 0.6 + 0.2;
-        double curve = base * base * base * 8.0 * 0.15;
+        double curve = base * base * base * 8.0;
 
         int screenWidth = Math.max(1, minecraft.getWindow().getScreenWidth());
         int screenHeight = Math.max(1, minecraft.getWindow().getScreenHeight());
@@ -3448,6 +3528,8 @@ public final class PhoneScreen extends Screen {
             minecraft.options.keyJump.setDown(false);
             minecraft.options.keySprint.setDown(false);
             minecraft.options.keyShift.setDown(false);
+            minecraft.options.keyUse.setDown(false);
+            minecraft.options.keyAttack.setDown(false);
             if (rawMouseMotionChanged && GLFW.glfwRawMouseMotionSupported()) {
                 GLFW.glfwSetInputMode(windowHandle, GLFW.GLFW_RAW_MOUSE_MOTION,
                         savedRawMouseMotion ? GLFW.GLFW_TRUE : GLFW.GLFW_FALSE);
@@ -3554,6 +3636,7 @@ public final class PhoneScreen extends Screen {
         callSessionMode = false;
         addContactMode = false;
         chatAppMode = true;
+        chatFriendsScrollOffset = 0;
         chatThreadMode = false;
         chatAddSelectorMode = false;
         chatAddSelectorScrollOffset = 0;
@@ -3786,6 +3869,7 @@ public final class PhoneScreen extends Screen {
         callAppMode = false;
         callRecentsMode = false;
         callContactsMode = true;
+        contactsScrollOffset = 0;
         
         callSessionMode = false;
         addContactMode = false;
@@ -4066,6 +4150,7 @@ public final class PhoneScreen extends Screen {
             chatDraft = "";
             chatThreadMode = false;
             chatAppMode = true;
+            chatFriendsScrollOffset = 0;
             rebuildWidgets();
         }
     }
@@ -4106,7 +4191,9 @@ public final class PhoneScreen extends Screen {
     }
 
     private int getChatFriendIndexAt(double mouseX, double mouseY, List<PhoneContact> friends) {
-        for (int index = 0; index < friends.size(); index++) {
+        int visibleRows = getChatFriendsVisibleRows();
+        int end = Math.min(friends.size(), chatFriendsScrollOffset + visibleRows + 1);
+        for (int index = chatFriendsScrollOffset; index < end; index++) {
             if (getChatFriendRowBounds(index, friends.size()).contains(mouseX, mouseY)) {
                 return index;
             }
@@ -4306,6 +4393,7 @@ public final class PhoneScreen extends Screen {
         closeCamera();
         cameraMode = false;
         chatAppMode = true;
+        chatFriendsScrollOffset = 0;
         chatScanActive = false;
         chatAddMenuOpen = true;
         chatScanHoverTargetId = null;
@@ -5382,10 +5470,6 @@ public final class PhoneScreen extends Screen {
 
     InteractionHand getOpenHand() {
         return openHand;
-    }
-
-    Font getScreenFont() {
-        return font;
     }
 
     private void addRotateButton() {

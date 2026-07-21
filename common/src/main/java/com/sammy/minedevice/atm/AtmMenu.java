@@ -48,9 +48,11 @@ public final class AtmMenu extends AbstractContainerMenu {
     private final DataSlot balanceLow = DataSlot.standalone();
     private final DataSlot failedAttempts = DataSlot.standalone();
     private final DataSlot cardSerial = DataSlot.standalone();
+    private final DataSlot cardlessModeSlot = DataSlot.standalone();
 
     private UUID cardId;
     private boolean pinVerified;
+    private boolean cardlessMode;
     private boolean dispenserActive = true;
 
     public AtmMenu(int containerId, Inventory playerInventory, BlockPos atmPos) {
@@ -81,6 +83,7 @@ public final class AtmMenu extends AbstractContainerMenu {
         addDataSlot(balanceLow);
         addDataSlot(failedAttempts);
         addDataSlot(cardSerial);
+        addDataSlot(cardlessModeSlot);
     }
 
     public static AtmMenu fromNetwork(int containerId, Inventory playerInventory) {
@@ -115,6 +118,28 @@ public final class AtmMenu extends AbstractContainerMenu {
         return !cardContainer.getItem(0).isEmpty();
     }
 
+    public boolean isCardlessMode() {
+        if (player.level().isClientSide) {
+            return cardlessModeSlot.get() != 0;
+        }
+        return cardlessMode;
+    }
+
+    public void setCardlessMode(boolean cardless) {
+        this.cardlessMode = cardless;
+        cardlessModeSlot.set(cardless ? 1 : 0);
+        if (cardless) {
+            onCardlessModeActivated();
+        }
+    }
+
+    private void onCardlessModeActivated() {
+        cardId = player.getUUID();
+        pinVerified = true;
+        cardState.set(STATE_PIN_OK);
+        updateBalanceSlot();
+    }
+
     public void preInsertCard(ItemStack card) {
         cardContainer.setItem(0, card);
     }
@@ -145,6 +170,10 @@ public final class AtmMenu extends AbstractContainerMenu {
     }
 
     private void onCardSlotChanged() {
+        if (cardlessMode) {
+            return;
+        }
+
         ItemStack card = cardContainer.getItem(0);
         if (card.isEmpty()) {
             cardId = null;
@@ -384,13 +413,15 @@ public final class AtmMenu extends AbstractContainerMenu {
         if (player == null) {
             return;
         }
-        ItemStack card = cardContainer.removeItemNoUpdate(0);
-        if (!card.isEmpty()) {
-            if (!player.getInventory().add(card)) {
-                player.drop(card, false);
+        if (!cardlessMode) {
+            ItemStack card = cardContainer.removeItemNoUpdate(0);
+            if (!card.isEmpty()) {
+                if (!player.getInventory().add(card)) {
+                    player.drop(card, false);
+                }
+                player.getInventory().setChanged();
+                player.inventoryMenu.broadcastChanges();
             }
-            player.getInventory().setChanged();
-            player.inventoryMenu.broadcastChanges();
         }
         cardId = null;
         pinVerified = false;
@@ -561,10 +592,12 @@ public final class AtmMenu extends AbstractContainerMenu {
     @Override
     public void removed(Player player) {
         if (player instanceof ServerPlayer serverPlayer) {
-            ItemStack card = cardContainer.removeItemNoUpdate(0);
-            if (!card.isEmpty()) {
-                if (!player.getInventory().add(card)) {
-                    player.drop(card, false);
+            if (!cardlessMode) {
+                ItemStack card = cardContainer.removeItemNoUpdate(0);
+                if (!card.isEmpty()) {
+                    if (!player.getInventory().add(card)) {
+                        player.drop(card, false);
+                    }
                 }
             }
             for (int i = 0; i < dispenserContainer.getContainerSize(); i++) {
