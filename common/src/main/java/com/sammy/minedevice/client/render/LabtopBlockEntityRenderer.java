@@ -81,14 +81,14 @@ public final class LabtopBlockEntityRenderer implements BlockEntityRenderer<Labt
             float shade = getRotatedShade(direction, yRot, angle);
             List<BakedQuad> quads = screenModel.getQuads(screenState, direction, random);
             for (BakedQuad quad : quads) {
-                consumer.putBulkData(pose, quad, shade, shade, shade, packedLight, packedOverlay);
+                consumer.putBulkData(pose, quad, shade, shade, shade, 1.0F, packedLight, packedOverlay);
             }
         }
         random.setSeed(42L);
         List<BakedQuad> unculledQuads = screenModel.getQuads(screenState, null, random);
         for (BakedQuad quad : unculledQuads) {
             float shade = getRotatedShade(quad.getDirection(), yRot, angle);
-            consumer.putBulkData(pose, quad, shade, shade, shade, packedLight, packedOverlay);
+            consumer.putBulkData(pose, quad, shade, shade, shade, 1.0F, packedLight, packedOverlay);
         }
 
         poseStack.popPose();

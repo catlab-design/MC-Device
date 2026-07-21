@@ -2,6 +2,7 @@ package com.sammy.minedevice.voice.svc;
 
 import com.sammy.minedevice.Minedevice;
 import com.sammy.minedevice.item.MegaphoneItem;
+import de.maxhenkel.voicechat.api.VoicechatConnection;
 import de.maxhenkel.voicechat.api.VoicechatServerApi;
 import de.maxhenkel.voicechat.api.audiochannel.LocationalAudioChannel;
 import de.maxhenkel.voicechat.api.audiochannel.StaticAudioChannel;

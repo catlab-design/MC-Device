@@ -1,5 +1,6 @@
 package com.sammy.minedevice.block;
 
+import com.mojang.serialization.MapCodec;
 import com.sammy.minedevice.Minedevice;
 import com.sammy.minedevice.ModBlockEntities;
 import com.sammy.minedevice.block.entity.LabtopBlockEntity;
@@ -79,6 +80,13 @@ public final class LabtopBlock extends HorizontalDirectionalBlock implements Ent
             rotateBox(Direction.WEST, SCREEN_STEP_4)
     );
 
+    public static final MapCodec<LabtopBlock> CODEC = Block.simpleCodec(LabtopBlock::new);
+
+    @Override
+    protected MapCodec<? extends HorizontalDirectionalBlock> codec() {
+        return CODEC;
+    }
+
     public LabtopBlock(Properties properties) {
         super(properties);
         registerDefaultState(this.stateDefinition.any()
@@ -127,7 +135,7 @@ public final class LabtopBlock extends HorizontalDirectionalBlock implements Ent
     }
 
     @Override
-    public InteractionResult use(BlockState state, Level level, BlockPos pos, Player player, InteractionHand hand, BlockHitResult hit) {
+    protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos, Player player, BlockHitResult hit) {
         if (player.isShiftKeyDown()) {
             boolean open = state.getValue(MONITOR_OPEN);
             level.setBlock(pos, state.setValue(MONITOR_OPEN, !open), 3);
@@ -164,14 +172,6 @@ public final class LabtopBlock extends HorizontalDirectionalBlock implements Ent
                 labtop.clientTick();
             }
         } : null;
-    }
-
-    @Override
-    public void playerWillDestroy(Level level, BlockPos pos, BlockState state, Player player) {
-        if (!level.isClientSide && !player.isCreative()) {
-            popResource(level, pos, new ItemStack(this));
-        }
-        super.playerWillDestroy(level, pos, state, player);
     }
 
     @Override

@@ -91,14 +91,12 @@ public final class LabtopOutlineRenderer {
 
         Matrix4f poseMatrix = pose.pose();
         Matrix3f normalMatrix = pose.normal();
-        consumer.vertex(poseMatrix, start.x(), start.y(), start.z())
-                .color(COLOR, COLOR, COLOR, ALPHA)
-                .normal(normalMatrix, direction.x(), direction.y(), direction.z())
-                .endVertex();
-        consumer.vertex(poseMatrix, end.x(), end.y(), end.z())
-                .color(COLOR, COLOR, COLOR, ALPHA)
-                .normal(normalMatrix, direction.x(), direction.y(), direction.z())
-                .endVertex();
+        consumer.addVertex(poseMatrix, start.x(), start.y(), start.z())
+                .setColor(COLOR, COLOR, COLOR, ALPHA)
+                .setNormal(pose, direction.x(), direction.y(), direction.z());
+        consumer.addVertex(poseMatrix, end.x(), end.y(), end.z())
+                .setColor(COLOR, COLOR, COLOR, ALPHA)
+                .setNormal(pose, direction.x(), direction.y(), direction.z());
     }
 
     private static void rotateAroundX(Vector3f point, float degrees, float originX, float originY, float originZ) {

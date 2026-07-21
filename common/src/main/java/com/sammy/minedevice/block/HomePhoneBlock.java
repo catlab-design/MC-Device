@@ -150,14 +150,6 @@ public final class HomePhoneBlock extends HorizontalDirectionalBlock implements 
     }
 
     @Override
-    public void playerWillDestroy(Level level, BlockPos pos, BlockState state, Player player) {
-        if (!level.isClientSide && !player.isCreative()) {
-            popResource(level, pos, new ItemStack(this));
-        }
-        super.playerWillDestroy(level, pos, state, player);
-    }
-
-    @Override
     public void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean isMoving) {
         if (!state.is(newState.getBlock()) && !level.isClientSide && level instanceof ServerLevel serverLevel) {
             PhoneCallManager.handleHomePhoneRemoved(serverLevel, pos);

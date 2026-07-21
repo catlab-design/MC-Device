@@ -1,5 +1,6 @@
 package com.sammy.minedevice.atm;
 
+import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.level.saveddata.SavedData;
@@ -12,13 +13,12 @@ public final class AtmConfigStore extends SavedData {
 
     public static AtmConfigStore get(MinecraftServer server) {
         return server.overworld().getDataStorage().computeIfAbsent(
-                AtmConfigStore::load,
-                AtmConfigStore::new,
+                new SavedData.Factory<>(AtmConfigStore::new, AtmConfigStore::load, null),
                 DATA_NAME
         );
     }
 
-    public static AtmConfigStore load(CompoundTag tag) {
+    public static AtmConfigStore load(CompoundTag tag, HolderLookup.Provider registries) {
         AtmConfigStore store = new AtmConfigStore();
         if (tag != null && tag.contains(CARD_REQUIRED_TAG)) {
             store.cardRequired = tag.getBoolean(CARD_REQUIRED_TAG);
@@ -36,7 +36,7 @@ public final class AtmConfigStore extends SavedData {
     }
 
     @Override
-    public CompoundTag save(CompoundTag tag) {
+    public CompoundTag save(CompoundTag tag, HolderLookup.Provider registries) {
         tag.putBoolean(CARD_REQUIRED_TAG, cardRequired);
         return tag;
     }

@@ -8,7 +8,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 
 public final class LabtopScreen extends Screen {
-    private static final ResourceLocation FRAME_TEXTURE = new ResourceLocation(
+    private static final ResourceLocation FRAME_TEXTURE = ResourceLocation.fromNamespaceAndPath(
             Minedevice.MOD_ID, "textures/gui/labtop_gui/labtop_frame.png");
     private static final int IMG_W = 224;
     private static final int IMG_H = 139;
@@ -35,7 +35,7 @@ public final class LabtopScreen extends Screen {
 
     @Override
     public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
-        renderBackground(guiGraphics);
+        renderBackground(guiGraphics, mouseX, mouseY, partialTick);
         guiGraphics.blit(FRAME_TEXTURE, panelX, panelY, panelW, panelH, 0, 0, IMG_W, IMG_H, IMG_W, IMG_H);
         super.render(guiGraphics, mouseX, mouseY, partialTick);
     }
