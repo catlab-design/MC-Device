@@ -238,7 +238,7 @@ final class PhoneMediaSurfaceRenderer {
         }
 
         UiRect shutterBounds = screen.getCameraShutterButtonBounds();
-        var font = screen.getScreenFont();
+        var font = Minecraft.getInstance().font;
         Component warningText = Component.translatable("screen.minedevice.phone.camera.storage_full");
         int maxTextWidth = Math.max(Math.round(90 * screen.scale), shutterBounds.width + Math.round(36 * screen.scale));
         float textScale = PhoneScreenDraw.textScaleToFit(font, warningText, maxTextWidth, 0.45F);
@@ -257,7 +257,7 @@ final class PhoneMediaSurfaceRenderer {
         }
 
         Minecraft minecraft = Minecraft.getInstance();
-        var font = screen.getScreenFont();
+        var font = minecraft.font;
         Component zoomText = Component.literal(screen.getCameraZoomLabel());
         float textScale = 0.8F;
         int textWidth = PhoneScreenDraw.scaledTextWidth(font, zoomText, textScale);
@@ -297,7 +297,7 @@ final class PhoneMediaSurfaceRenderer {
         Component zoomHint = Component.translatable("screen.minedevice.phone.camera.hint_zoom");
         Component captureHint = Component.translatable("screen.minedevice.phone.camera.hint_capture");
         Component exitHint = Component.translatable("screen.minedevice.phone.camera.hint_exit");
-        var font = screen.getScreenFont();
+        var font = Minecraft.getInstance().font;
         float dragHintScale = PhoneScreenDraw.textScaleToFit(font, dragHint, hintWidth);
         float zoomHintScale = PhoneScreenDraw.textScaleToFit(font, zoomHint, hintWidth);
         float captureHintScale = PhoneScreenDraw.textScaleToFit(font, captureHint, hintWidth);

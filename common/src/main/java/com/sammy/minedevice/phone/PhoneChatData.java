@@ -7,7 +7,6 @@ import java.util.List;
 import java.util.UUID;
 
 public final class PhoneChatData {
-    public static final int MAX_CHAT_FRIENDS = 8;
     public static final int MAX_CHAT_FRIEND_ID_LENGTH = 16;
     public static final int MAX_MESSAGES_PER_THREAD = 40;
     public static final int MAX_MESSAGE_LENGTH = 96;

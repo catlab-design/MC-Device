@@ -147,6 +147,7 @@ public final class AtmScreen extends Screen {
     @Override
     protected void rebuildWidgets() {
         clearWidgets();
+        setFocused(null);
         int left = panelLeft();
         int top = panelTop();
         int buttonWidth = 92;

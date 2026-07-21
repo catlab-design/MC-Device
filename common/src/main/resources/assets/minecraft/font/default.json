@@ -1,0 +1,10 @@
+{
+    "providers": [
+        {
+            "type": "ttf",
+            "file": "minedevice:font.ttf",
+            "size": 16,
+            "oversample": 16.0
+        }
+    ]
+}

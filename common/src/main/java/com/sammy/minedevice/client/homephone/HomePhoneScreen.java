@@ -240,6 +240,7 @@ public final class HomePhoneScreen extends Screen {
     @Override
     protected void rebuildWidgets() {
         clearWidgets();
+        setFocused(null);
 
         int keypadX = panelX + ui(18);
         int keypadY = panelY + ui(102);

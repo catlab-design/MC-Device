@@ -80,6 +80,7 @@ public final class WalkieScreen extends Screen {
 
     private void rebuildButtons() {
         clearWidgets();
+        setFocused(null);
         int left = (width - PANEL_WIDTH) / 2;
         int top = (height - PANEL_HEIGHT) / 2;
         int row = top + 82;

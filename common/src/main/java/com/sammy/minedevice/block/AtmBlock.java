@@ -1,6 +1,7 @@
 package com.sammy.minedevice.block;
 
 import com.sammy.minedevice.ModItems;
+import com.sammy.minedevice.atm.AtmConfigStore;
 import com.sammy.minedevice.atm.AtmNetworking;
 import com.sammy.minedevice.item.CardItem;
 import com.mojang.serialization.MapCodec;
@@ -85,16 +86,22 @@ public final class AtmBlock extends HorizontalDirectionalBlock {
             return ItemInteractionResult.PASS_TO_DEFAULT_BLOCK_INTERACTION;
         }
 
-        if (!stack.is(ModItems.CARD.get())) {
+        boolean hasCard = stack.is(ModItems.CARD.get());
+
+        if (!level.isClientSide() && player instanceof ServerPlayer serverPlayer) {
+            AtmConfigStore config = AtmConfigStore.get(serverPlayer.getServer());
+            if (hasCard || !config.isCardRequired()) {
+                BlockPos basePos = state.getValue(PART) == 0 ? pos : pos.below();
+                AtmNetworking.openScreen(serverPlayer, basePos);
+                return ItemInteractionResult.SUCCESS;
+            }
+        }
+
+        if (!hasCard) {
             if (level.isClientSide()) {
                 player.displayClientMessage(Component.translatable("screen.minedevice.atm.insert_card"), true);
             }
-            return ItemInteractionResult.sidedSuccess(level.isClientSide());
-        }
-
-        if (!level.isClientSide() && player instanceof ServerPlayer serverPlayer) {
-            BlockPos basePos = state.getValue(PART) == 0 ? pos : pos.below();
-            AtmNetworking.openScreen(serverPlayer, basePos);
+            return ItemInteractionResult.PASS_TO_DEFAULT_BLOCK_INTERACTION;
         }
 
         return ItemInteractionResult.sidedSuccess(level.isClientSide());
@@ -103,6 +110,15 @@ public final class AtmBlock extends HorizontalDirectionalBlock {
     @Override
     protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos, Player player,
                                                BlockHitResult hitResult) {
+        if (!level.isClientSide() && player instanceof ServerPlayer serverPlayer) {
+            AtmConfigStore config = AtmConfigStore.get(serverPlayer.getServer());
+            if (!config.isCardRequired()) {
+                BlockPos basePos = state.getValue(PART) == 0 ? pos : pos.below();
+                AtmNetworking.openScreen(serverPlayer, basePos);
+                return InteractionResult.sidedSuccess(level.isClientSide());
+            }
+        }
+
         if (!level.isClientSide()) {
             player.displayClientMessage(Component.translatable("screen.minedevice.atm.insert_card"), true);
         }

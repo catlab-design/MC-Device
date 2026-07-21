@@ -3,6 +3,7 @@ package com.sammy.minedevice;
 import com.mojang.logging.LogUtils;
 import com.sammy.minedevice.airstrike.AirstrikeManager;
 import com.sammy.minedevice.atm.AtmNetworking;
+import com.sammy.minedevice.command.MinedeviceCommands;
 import com.sammy.minedevice.phone.CallLogStorageManager;
 import com.sammy.minedevice.phone.ChatStorageManager;
 import com.sammy.minedevice.phone.PhoneNetworking;
@@ -36,6 +37,7 @@ public final class Minedevice {
         WalkieNetworking.init();
         AtmNetworking.init();
         AirstrikeManager.init();
+        MinedeviceCommands.init();
 
         registerChatStorageLifecycle();
 

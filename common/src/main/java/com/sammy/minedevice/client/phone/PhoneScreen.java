@@ -7,6 +7,7 @@ import com.sammy.minedevice.Minedevice;
 import com.sammy.minedevice.ModItems;
 import com.sammy.minedevice.block.entity.HomePhoneBlockEntity;
 import com.sammy.minedevice.item.PhoneItem;
+import com.sammy.minedevice.phone.CallLogEntry;
 import com.sammy.minedevice.phone.PhoneCallState;
 import com.sammy.minedevice.phone.PhoneChatData;
 import com.sammy.minedevice.phone.PhoneChatMessage;
@@ -370,6 +371,7 @@ public final class PhoneScreen extends Screen {
     protected void rebuildWidgets() {
         updateLayout();
         clearWidgets();
+        setFocused(null);
         if (photoViewerMode) {
             addPhotoViewerWidgets();
         } else if (callSessionMode) {
@@ -823,7 +825,6 @@ public final class PhoneScreen extends Screen {
                 return true;
             }
             if (Character.isDigit(codePoint)) {
-                appendChatFriendDigit(String.valueOf(codePoint));
                 return true;
             }
             return false;
@@ -1339,6 +1340,20 @@ public final class PhoneScreen extends Screen {
             int maxOffset = getMaxChatAddSelectorScrollOffset();
             int scrollAmount = (int) (scrollY * 12);
             chatAddSelectorScrollOffset = Mth.clamp(chatAddSelectorScrollOffset + scrollAmount, -maxOffset, 0);
+            return true;
+        }
+
+        if (callAppMode && !callSessionMode && !callContactsMode && scrollY != 0.0D) {
+            List<CallLogEntry> entries = PhoneClientCallState.getCallLogEntries();
+            int rowHeight = Math.max(16, Math.round(20 * scale));
+            UiRect contentBounds = getCallSurfaceBounds();
+            int headerHeight = getCallHeaderHeight();
+            int topPadding = Math.max(8, Math.round(10 * scale));
+            int scrollTop = contentBounds.top + headerHeight + topPadding;
+            int bottomClip = contentBounds.bottom() - Math.max(8, Math.round(10 * scale));
+            int visibleRows = Math.max(1, (bottomClip - scrollTop) / rowHeight);
+            int maxOffset = Math.max(0, entries.size() - visibleRows);
+            recentsScrollOffset = Mth.clamp(recentsScrollOffset + (int) -Math.signum(scrollY), 0, maxOffset);
             return true;
         }
 
@@ -2813,6 +2828,8 @@ public final class PhoneScreen extends Screen {
             minecraft.options.keyJump.setDown(false);
             minecraft.options.keySprint.setDown(false);
             minecraft.options.keyShift.setDown(false);
+            minecraft.options.keyUse.setDown(false);
+            minecraft.options.keyAttack.setDown(false);
             if (GLFW.glfwRawMouseMotionSupported()) {
                 GLFW.glfwSetInputMode(windowHandle, GLFW.GLFW_RAW_MOUSE_MOTION,
                         savedRawMouseMotion ? GLFW.GLFW_TRUE : GLFW.GLFW_FALSE);
@@ -4440,10 +4457,6 @@ public final class PhoneScreen extends Screen {
 
     InteractionHand getOpenHand() {
         return openHand;
-    }
-
-    Font getScreenFont() {
-        return font;
     }
 
 }
