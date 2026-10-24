@@ -1,4 +1,4 @@
-# MineDevice
+# MC-Device V.1 (⚠️ OUTDATED ⚠️)
 
 MineDevice is an Architectury mod for Minecraft `1.20.1` that adds a usable mobile phone and home phone system.
 
